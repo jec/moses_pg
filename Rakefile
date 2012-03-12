@@ -9,3 +9,9 @@ namespace :spec do
     t.pattern = 'spec/**/buffer_spec.rb'
   end
 end
+
+namespace :spec do
+  RSpec::Core::RakeTask.new('message') do |t|
+    t.pattern = 'spec/**/message_spec.rb'
+  end
+end
