@@ -45,8 +45,9 @@ module MosesPG
       # the previous command
       after_transition any => :ready, :do => :_finish_previous_query
 
-      # when the bind is done, execute the portal
-      after_transition :bind_in_progress => :bind_completed, :do => :_send_execute
+      # when the bind is done, describe and execute the portal
+      after_transition :bind_in_progress => :bind_completed, :do => :_send_portal_describe
+      after_transition :portal_describe_in_progress => :portal_described, :do => :_send_execute
 
       event :authentication_ok do
         transition [:startup, :authorizing] => :receive_server_data
@@ -105,8 +106,11 @@ module MosesPG
       event :bind_sent do
         transition :ready => :bind_in_progress
       end
+      event :portal_describe_sent do
+        transition :bind_completed => :portal_describe_in_progress
+      end
       event :execute_sent do
-        transition :bind_completed => :execute_in_progress
+        transition :portal_described => :execute_in_progress
       end
       event :sync_sent do
       end
@@ -123,6 +127,7 @@ module MosesPG
       end
       event :row_description do
         transition :query_in_progress => :query_described
+        transition :portal_describe_in_progress => :portal_described
       end
       event :data_row do
         transition [:query_described, :query_data_received] => :query_data_received
@@ -321,10 +326,16 @@ module MosesPG
       bind_sent
     end
 
+    def _send_portal_describe
+      send_message(MosesPG::Message::DescribePortal.new(@portals[@statement_in_progress.to_s]))
+      send_message(MosesPG::Message::Flush.new)
+      @result = MosesPG::Result.new
+      portal_describe_sent
+    end
+
     def _send_execute
       send_message(MosesPG::Message::Execute.new(@portals[@statement_in_progress.to_s], @batch_size))
       send_message(MosesPG::Message::Flush.new)
-      @result = MosesPG::Result.new
       execute_sent
     end
 
