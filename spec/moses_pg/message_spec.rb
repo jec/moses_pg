@@ -31,49 +31,49 @@ module MosesPG
       end
     end
 
-    describe AuthenticationMD5Password do
+    describe AuthenticationMd5Password do
       describe '::create' do
         it 'creates an instance' do
           @message = MosesPG::Message.create('R', "\x00\x00\x00\x05abcd")
-          @message.should be_instance_of(AuthenticationMD5Password)
+          @message.should be_instance_of(AuthenticationMd5Password)
           @message.salt.should == 'abcd'
         end
       end
     end
 
-    describe AuthenticationSCMCredential do
+    describe AuthenticationScmCredential do
       describe '::create' do
         it 'creates an instance' do
           @message = MosesPG::Message.create('R', "\x00\x00\x00\x06")
-          @message.should be_instance_of(AuthenticationSCMCredential)
+          @message.should be_instance_of(AuthenticationScmCredential)
         end
       end
     end
 
-    describe AuthenticationGSS do
+    describe AuthenticationGss do
       describe '::create' do
         it 'creates an instance' do
           @message = MosesPG::Message.create('R', "\x00\x00\x00\x07")
-          @message.should be_instance_of(AuthenticationGSS)
+          @message.should be_instance_of(AuthenticationGss)
         end
       end
 
     end
 
-    describe AuthenticationSSPI do
+    describe AuthenticationSspi do
       describe '::create' do
         it 'creates an instance' do
           @message = MosesPG::Message.create('R', "\x00\x00\x00\x09")
-          @message.should be_instance_of(AuthenticationSSPI)
+          @message.should be_instance_of(AuthenticationSspi)
         end
       end
     end
 
-    describe AuthenticationGSSContinue do
+    describe AuthenticationGssContinue do
       describe '::create' do
         it 'creates an instance' do
           @message = MosesPG::Message.create('R', "\x00\x00\x00\x08this is a test")
-          @message.should be_instance_of(AuthenticationGSSContinue)
+          @message.should be_instance_of(AuthenticationGssContinue)
           @message.auth_data.should == 'this is a test'
         end
       end

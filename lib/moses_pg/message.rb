@@ -16,6 +16,12 @@ class Fixnum
   end
 end
 
+class String
+  def decamelize
+    gsub(/[A-Z]/) {|m| $` == '' ? m.downcase : "_#{m.downcase}"}
+  end
+end
+
 class StringIO
   def read_exactly(n)
     str = read(n)
@@ -47,7 +53,6 @@ module MosesPG
       @@types = {}
 
       def self.register
-        #puts "Registering #{self.name} with code #{self::Code}"
         raise "Message code #{self::Code} already registered by #{@@types[self::Code]}" if @@types.has_key?(self::Code)
         @@types[self::Code] = self
       end
@@ -68,6 +73,14 @@ module MosesPG
         allocate.parse(stream)
       end
 
+      def self.event
+        name[/::([^:]+)$/, 1].decamelize.to_sym
+      end
+
+      def event
+        self.class.event
+      end
+
       def parse(stream)
         self
       end
@@ -81,6 +94,11 @@ module MosesPG
         ''
       end
 
+      def inspect
+        ivars = instance_variables.collect { |i| "#{i.to_s[1..-1]}=#{instance_variable_get(i).inspect}" }.join(', ')
+        "#<#{self.class.name[/::([^:]+)$/, 1]} #{ivars}>"
+      end
+
     end
 
     class Authentication < Base
@@ -92,7 +110,6 @@ module MosesPG
       @@auth_types = {}
 
       def self.register
-        #puts "Registering #{self.name} with auth type #{self::Auth_Type}"
         if @@types.has_key?(self::Auth_Type)
           raise "Authorization type #{self::Auth_Type} already registered by #{@@types[self::Auth_Type]}"
         end
@@ -129,7 +146,7 @@ module MosesPG
       register
     end
 
-    class AuthenticationMD5Password < Authentication
+    class AuthenticationMd5Password < Authentication
       Auth_Type = 5
       register
       attr_reader :salt
@@ -140,22 +157,22 @@ module MosesPG
       end
     end
 
-    class AuthenticationSCMCredential < Authentication
+    class AuthenticationScmCredential < Authentication
       Auth_Type = 6
       register
     end
 
-    class AuthenticationGSS < Authentication
+    class AuthenticationGss < Authentication
       Auth_Type = 7
       register
     end
 
-    class AuthenticationSSPI < Authentication
+    class AuthenticationSspi < Authentication
       Auth_Type = 9
       register
     end
 
-    class AuthenticationGSSContinue < Authentication
+    class AuthenticationGssContinue < Authentication
       Auth_Type = 8
       register
       attr_reader :auth_data
@@ -242,7 +259,7 @@ module MosesPG
         buf = [@portal_name, "\0", @statement_name, "\0", ([@format.size] + @format + [@values.size]).pack('n*')]
         @values.each { |value| buf << [value.size].pack('n') << value }
         buf << ([@result_format.size] + @result_format).pack('n*')
-        str = buf.join
+        buf.join
       end
     end
 
@@ -297,7 +314,7 @@ module MosesPG
       attr_reader :tag
 
       def parse(stream)
-        @tag = stream
+        @tag = stream.strip
         self
       end
     end
@@ -349,21 +366,22 @@ module MosesPG
 
     class Execute < Base
       Code = 'E'
-      attr_reader :name, :max_rows
+      attr_reader :name, :batch_size
 
-      def initialize(name, max_rows = 0)
+      def initialize(name, batch_size = 0)
         @name = name
-        @max_rows = max_rows
+        @batch_size = batch_size
       end
 
       def _dump
-        "#{@name}\0#{[@max_rows].pack('N')}"
+        "#{@name}\0#{[@batch_size].pack('N')}"
       end
     end
 
     class ErrorResponse < Base
       Code = 'E'
       register
+      attr_reader :errors
 
       def parse(stream)
         @errors = Hash[stream.scan(/(.)(.*?)\0/)]
