@@ -34,14 +34,14 @@ sqls = [
   ::EM.add_periodic_timer(0.2) { puts "Hello" }
 
   count = sqls.size
-  deferrable, db = MosesPG.connect(options)
+  deferrable = MosesPG.connect(options)
 
   deferrable.errback do |errstr|
     puts "Connection failed: #{errstr}"
     ::EM.stop
   end
 
-  deferrable.callback do
+  deferrable.callback do |db|
     puts 'Connected'
     sqls.each_with_index do |sql, i|
       defer = db.execute(sql)

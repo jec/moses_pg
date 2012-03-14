@@ -13,6 +13,8 @@ module MosesPG
     Connection.connect(opts)
   end
 
+  FakeResult = Struct.new(:result)
+
   class NullLogger
     def trace(*s) end
     def debug(*s) end
@@ -184,10 +186,11 @@ module MosesPG
       port = opts[:port] || Default_Port
       defer = ::EM::DefaultDeferrable.new
       if host
-        [defer, ::EM.connect(host, port, self, defer, opts)]
+        ::EM.connect(host, port, self, defer, opts)
       else
-        [defer, ::EM.connect_unix_domain("/tmp/.s.PGSQL.#{port}", self, defer, opts)]
+        ::EM.connect_unix_domain("/tmp/.s.PGSQL.#{port}", self, defer, opts)
       end
+      defer
     end
 
     def initialize(defer, opts = {})
@@ -210,7 +213,10 @@ module MosesPG
 
     def post_init
       send_message(MosesPG::Message::StartupMessage.new(@user, @dbname))
-      @result = Result.new
+
+      # when we enter the ready state after connecting, send self to the
+      # callback
+      @result = FakeResult.new(self)
     end
 
     def send_message(message)
