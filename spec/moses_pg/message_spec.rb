@@ -174,9 +174,9 @@ module MosesPG
       describe '::create' do
         it 'creates an instance' do
           @message = MosesPG::Message.create('D',
-              "\x00\x04\x00\x00\x00\x04this\x00\x00\x00\x02is\x00\x00\x00\x01a\x00\x00\x00\x04test")
+              "\x00\x05\x00\x00\x00\x04this\x00\x00\x00\x02is\x00\x00\x00\x01a\xFF\xFF\xFF\xFF\x00\x00\x00\x04test")
           @message.should be_instance_of(DataRow)
-          @message.row.should == ['this', 'is', 'a', 'test']
+          @message.row.should == ['this', 'is', 'a', nil, 'test']
         end
       end
     end

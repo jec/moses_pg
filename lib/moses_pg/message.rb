@@ -3,7 +3,7 @@
 require 'set'
 require 'stringio'
 
-class Fixnum
+class Integer
   Max_16_Bit = 2**16 - 1
   Mid_16_Bit = 2**15
   Max_32_Bit = 2**32 - 1
@@ -329,8 +329,8 @@ module MosesPG
         ncols = sio.read_exactly(2).unpack('n').first
         @row = []
         ncols.times do
-          len = sio.read_exactly(4).unpack('N').first
-          @row << sio.read_exactly(len)
+          len = sio.read_exactly(4).unpack('N').first.to_s32
+          @row << ((len == -1) ? nil : sio.read_exactly(len))
         end
         self
       ensure
