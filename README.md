@@ -10,8 +10,8 @@ require 'eventmachine'
 require 'moses_pg'
 
 EM.run do
-  defer, conn = MosesPG.connect(user: 'jim', password: 'jim')
-  defer.callback do
+  defer = MosesPG.connect(user: 'jim', password: 'jim')
+  defer.callback do |conn|
     defer1 = conn.execute("SELECT 'Hello World!' AS hello")
     defer1.callback { |result| p result; EM.stop }
     defer1.errback { |errstr| puts "ERROR: #{errstr}"; EM.stop }
