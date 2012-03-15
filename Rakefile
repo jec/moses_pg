@@ -11,6 +11,12 @@ namespace :spec do
 end
 
 namespace :spec do
+  RSpec::Core::RakeTask.new('datatype') do |t|
+    t.pattern = 'spec/**/datatype_spec.rb'
+  end
+end
+
+namespace :spec do
   RSpec::Core::RakeTask.new('message') do |t|
     t.pattern = 'spec/**/message_spec.rb'
   end

@@ -94,9 +94,9 @@ module MosesPG
         ''
       end
 
-      def inspect
+      def to_s
         ivars = instance_variables.collect { |i| "#{i.to_s[1..-1]}=#{instance_variable_get(i).inspect}" }.join(', ')
-        "#<#{self.class.name[/::([^:]+)$/, 1]} #{ivars}>"
+        "#<#{self.class.name} #{ivars}>"
       end
 
     end

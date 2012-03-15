@@ -1,22 +1,33 @@
 # encoding: utf-8
 
+require 'moses_pg/column'
+
 module MosesPG
 
   class Result
 
-    attr_reader :rows, :columns, :tag
+    attr_reader :connection, :rows, :columns, :tag
 
-    def initialize
+    def initialize(connection)
+      @connection = connection
       @rows = []
     end
 
     def columns=(cols)
-      @columns = cols
+      @columns = cols.collect { |args| Column.new(*args) }
     end
 
     def <<(row)
       @rows << row
       self
+    end
+
+    def each_row
+      @rows.each { |row| yield(row) }
+    end
+
+    def each_row_as_native
+      @rows.each { |row| yield(Array.new(row.size) { |i| @columns[i].type.translate(row[i]) }) }
     end
 
     def finish(tag)
@@ -32,14 +43,19 @@ module MosesPG
       self
     end
 
+    def to_s
+      "#<#{self.class.name} columns=#{@columns.inspect} rows=#{@rows.inspect} tag=#{@tag.inspect}>"
+    end
+
   end
 
   class ResultGroup
 
     attr_reader :result
 
-    def initialize
-      @result = [Result.new]
+    def initialize(connection)
+      @connection = connection
+      @result = [Result.new(connection)]
     end
 
     def columns=(cols)
@@ -58,7 +74,7 @@ module MosesPG
 
     def current_result
       if @result.last.finished?
-        res = Result.new
+        res = Result.new(connection)
         @result << res
         yield(res)
       else

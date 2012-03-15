@@ -225,7 +225,7 @@ module MosesPG
     end
 
     def send_message(message)
-      @logger.trace { "<<< #{message.inspect}" }
+      @logger.trace { "<<< #{message}" }
       send_data(message.dump)
     end
 
@@ -233,7 +233,7 @@ module MosesPG
       #@logger.trace { ">>> #{data.inspect}" }
       @buffer.receive(data) do |message_type_char, raw_message|
         @message = MosesPG::Message.create(message_type_char, raw_message)
-        @logger.trace { ">>> #{@message.inspect}" }
+        @logger.trace { ">>> #{@message}" }
         send(@message.event, @message)
       end
     end
@@ -309,7 +309,7 @@ module MosesPG
 
     def _send_query(sql)
       send_message(MosesPG::Message::Query.new(sql))
-      @result = MosesPG::ResultGroup.new
+      @result = MosesPG::ResultGroup.new(self)
       query_sent
     end
 
@@ -329,7 +329,7 @@ module MosesPG
     def _send_portal_describe
       send_message(MosesPG::Message::DescribePortal.new(@portals[@statement_in_progress.to_s]))
       send_message(MosesPG::Message::Flush.new)
-      @result = MosesPG::Result.new
+      @result = MosesPG::Result.new(self)
       portal_describe_sent
     end
 
