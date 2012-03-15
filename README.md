@@ -31,12 +31,11 @@ end
 
 _produces:_
 
-`
-#<MosesPG::Column name="hello" type=#<MosesPG::Datatype::Varchar precision=30> format=0>
-#<MosesPG::Column name="area_code" type=#<MosesPG::Datatype::Integer > format=0>
-#<MosesPG::Column name="now" type=#<MosesPG::Datatype::Timestamp precision=6> format=0>
-["Hello World!", 954, 2012-03-14 23:26:33 -0400]
-`
+    #<MosesPG::Column name="hello" type=#<MosesPG::Datatype::Varchar precision=30> format=0>
+    #<MosesPG::Column name="area_code" type=#<MosesPG::Datatype::Integer > format=0>
+    #<MosesPG::Column name="now" type=#<MosesPG::Datatype::Timestamp precision=6> format=0>
+    ["Hello World!", 954, 2012-03-14 23:26:33 -0400]
+
 Note that the last column is a Ruby Time object.
 
 ## Dependencies
