@@ -69,7 +69,7 @@ translations)
 
 * SSL session encryption
 
-* Funtion call interface
+* Function call interface
 
 * COPY in/out operations
 
