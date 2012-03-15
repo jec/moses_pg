@@ -1,12 +1,14 @@
 # encoding: utf-8
 
+#--
 # MosesPG -- a Ruby library for accessing PostgreSQL
 # Copyright (C) 2012 James Edwin Cain (user: moses_pg; domain: jcain.net)
-# 
+#
 # This file is part of the MosesPG library.  This Library is free software; you
 # may redistribute it or modify it under the terms of the license contained in
 # the file LICENCE.txt. If you did not receive a copy of the license, please
 # contact the copyright holder.
+#++
 
 require 'etc'
 require 'eventmachine'
@@ -15,15 +17,28 @@ require 'moses_pg/message/buffer'
 require 'moses_pg/result'
 require 'state_machine'
 
+#
+# MosesPG provides EventMachine-based access to PostgreSQL using version 3 of
+# their wire protocol. It is still under active development and incomplete. In
+# particular, type translation is implemented for most of the column data types
+# described in the PostgreSQL manual, but many of the more exotic types do not
+# yet have meaningful translations. Simple queries and multi-step queries
+# (parse, bind/describe/execute) are working.
+#
 module MosesPG
 
+  #
+  # Convenience method to access Connection::connect
+  #
+  # @return [EventMachine::Deferrable]
+  #
   def self.connect(opts = {})
     Connection.connect(opts)
   end
 
-  FakeResult = Struct.new(:result)
+  FakeResult = Struct.new(:result) # @private
 
-  class NullLogger
+  class NullLogger # @private
     def trace(*s) end
     def debug(*s) end
     def info(*s) end
@@ -32,6 +47,9 @@ module MosesPG
     def fatal(*s) end
   end
 
+  #
+  # Provides a connection to PostgreSQL
+  #
   class Connection < ::EM::Connection
 
     Default_Host = 'localhost'
@@ -149,6 +167,10 @@ module MosesPG
         transition :execute_in_progress => :ready
       end
 
+      #
+      # In the ready state, the query methods send the requests to PostgreSQL
+      # immediately.
+      #
       state :ready do
         def execute(sql)
           @logger.debug 'in #execute; starting immediate'
@@ -160,12 +182,16 @@ module MosesPG
           _send(:_send_parse, [name, sql, datatypes])
         end
 
-        def execute_prepared(statement_name, *bindvars)
+        def execute_prepared(name, *bindvars)
           @logger.debug 'in #execute_prepared; starting immediate'
-          _send(:_send_bind, [statement_name, *bindvars])
+          _send(:_send_bind, [name, *bindvars])
         end
       end
 
+      #
+      # In all other states, the query methods queue the requests until the
+      # next time the ready state is entered.
+      #
       state all - :ready do
         def execute(sql)
           @logger.debug 'in #execute; queueing request'
@@ -181,19 +207,47 @@ module MosesPG
           defer
         end
 
-        def execute_prepared(statement_name, *bindvars)
+        def execute_prepared(name, *bindvars)
           @logger.debug 'in #execute_prepared; queueing request'
           defer = ::EM::DefaultDeferrable.new
-          @waiting << [:_send_bind, [statement_name, *bindvars], defer]
+          @waiting << [:_send_bind, [name, *bindvars], defer]
           defer
         end
       end
 
     end
 
-    attr_reader :message, :server_params, :batch_size, :logger
-    attr_accessor :in_progress
+    # Returns the PostgreSQL server parameters
+    #
+    # @return [Hash]
+    attr_reader :server_params
 
+    # Sets or retrieves the batch size used by +#execute_prepared+
+    #
+    # A value of zero means there is no limit.
+    #
+    # @return [Integer]
+    attr_reader :batch_size
+
+    # Returns the logger passed to +Connection::connect+
+    attr_reader :logger
+
+    #
+    # Initiates a connection to PostgreSQL and returns a +Deferrable+
+    #
+    # If the connection and authentication are successful, the +Connection+
+    # object will be sent to the +Deferrable+'s +#callback+ method. If it
+    # fails, the text of the error is sent to the +#errback+ method.
+    #
+    # @option opts [String] :host The hostname or IP address of the PostgreSQL
+    #   server (if not specified, connects via the UNIX domain socket)
+    # @option opts [Integer] :port The port (defaults to 5432)
+    # @option opts [String] :dbname The database name
+    # @option opts [String] :user The user name
+    # @option opts [String] :password The password
+    # @option opts [#trace, #debug, #info, #warn, #error, #fatal] :logger A logging object
+    # @return [EventMachine::Deferrable]
+    #
     def self.connect(opts = {})
       host = opts[:host]
       port = opts[:port] || Default_Port
@@ -206,7 +260,7 @@ module MosesPG
       defer
     end
 
-    def initialize(defer, opts = {})
+    def initialize(defer, opts = {}) # @private
       super()
       @dbname = opts[:dbname]
       @user = opts[:user] || Etc.getlogin
@@ -224,6 +278,9 @@ module MosesPG
       @batch_size = batch_size.to_i
     end
 
+    #
+    # Called by +EventMachine::Connection+ once the connection is established
+    #
     def post_init
       send_message(MosesPG::Message::StartupMessage.new(@user, @dbname))
 
@@ -232,11 +289,19 @@ module MosesPG
       @result = FakeResult.new(self)
     end
 
+    #
+    # Sends a +Message+ to the PostgreSQL server
+    #
+    # @param [Message] message The +Message+ object to send to the server
+    #
     def send_message(message)
       @logger.trace { "<<< #{message}" }
       send_data(message.dump)
     end
 
+    #
+    # Called by +EventMachine::Connection+ when data is received
+    #
     def receive_data(data)
       #@logger.trace { ">>> #{data.inspect}" }
       @buffer.receive(data) do |message_type_char, raw_message|
@@ -245,6 +310,68 @@ module MosesPG
         send(@message.event, @message)
       end
     end
+
+    #
+    # Called by +EventMachine::Connection+ when the connection is closed
+    #
+    def unbind
+      @logger.debug 'Connection closed'
+    end
+
+    #
+    # Submits SQL command (or commands) to the PostgreSQL server and returns a
+    # +Deferrable+
+    #
+    # If all commands are successfully executed, then the +Result+ is sent to
+    # the +Deferrable+'s +#callback+ method.  If an error occurs, an error
+    # message is sent to +#errback+, along with any partial +Result+ that
+    # accumulated before the error.
+    #
+    # @note It is not necessary to wait for a response to +Deferrable+ before
+    #   submitting additional queries.  The +Connection+ will queue the requests
+    #   if necessary and run them in sequence as the PostgreSQL server responds
+    #   with the previous results.
+    # @param [String] sql A single SQL command or multiple commands, separated by semicolons
+    # @return [EventMachine::Deferrable]
+    #
+    def execute(sql)
+      super
+    end
+
+    #
+    # Submits a single SQL command for parsing and returns a +Deferrable+
+    #
+    # @note (see #execute)
+    # @param [String] name A name used to refer to the SQL later for execution
+    # @param [String] sql A single SQL command to be parsed and saved
+    # @param [nil, Array<Integer>] datatypes The data type(s) to use for the parameters
+    #   included in the SQL command, if any
+    # @return [EventMachine::Deferrable]
+    #
+    def prepare(name, sql, datatypes = nil)
+      super
+    end
+
+    #
+    # Initiates the execution of a previously prepared SQL command and returns
+    # a +Deferrable+
+    #
+    # If the command is successfully executed, then the +Result+ is sent to the
+    # +Deferrable+'s +#callback+ method.  If an error occurs, an error message
+    # is sent to +#errback+, along with any partial +Result+ that accumulated
+    # before the error.
+    #
+    # @note (see #execute)
+    # @param [String] name The name given to the SQL command when +#prepare+
+    #   was called
+    # @param [Array<Object>] bindvars The values to bind to the placeholders in the SQL command, if any
+    # @return [EventMachine::Deferrable]
+    #
+    def execute_prepared(name, *bindvars)
+      super
+    end
+
+    private
 
     def authentication_cleartext_password(*args)
       send_message(MosesPG::Message::PasswordMessage.new(@password))
@@ -357,10 +484,6 @@ module MosesPG
       @in_progress.fail(@message.errors['M'], @result.result)
     end
     alias :_fail_execute :_fail_query
-
-    def unbind
-      @logger.debug 'Connection closed'
-    end
 
     def generate_portal_name(statement_name)
       str = statement_name.to_s

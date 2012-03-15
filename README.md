@@ -67,6 +67,9 @@ translations)
 
 ### Planned features
 
+* Declaration of parameter types using +Datatype+ values rather than
+  the raw OIDs.
+
 * SSL session encryption
 
 * Function call interface
