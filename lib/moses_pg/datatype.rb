@@ -26,16 +26,42 @@ module MosesPG
 
       private_class_method :new
 
+      #
+      # Registers a subclass for an _oid_
+      #
+      # @raise [RuntimeError] Raises an error if the _oid_ has already been registered
+      # @param [Integer] oid The OID to associate with the calling class
+      #
       def self.register(oid)
         raise "OID #{oid} already registered" if @@types.has_key?(oid)
+        register!(oid)
+      end
+
+      #
+      # Registers a subclass for an _oid_; does not raise an exception for
+      # overriding a previously registered class
+      #
+      # This one does *not* raise an error if _oid_ has already been registered,
+      # which allows a user to configure a custom class for type translation.
+      #
+      # @param [Integer] oid The OID to associate with the calling class
+      #
+      def self.register!(oid)
         @@types[oid] = self
         self.const_set(:OID, oid)
       end
 
+      # @return [Hash]
       def self.types
         @@types
       end
 
+      #
+      # Creates an object from a subclass of +Base+ that is appropriate for the _oid_
+      #
+      # @param [Integer] oid The OID
+      # @param [Integer] mod The type mod
+      # @return [Datatype::Base]
       def self.create(oid, mod)
         if klass = @@types[oid]
           klass.class_eval { new(mod) }
@@ -45,7 +71,7 @@ module MosesPG
         end
       end
 
-      def initialize(mod)
+      def initialize(mod) # @private
         @mod = mod
       end
 
@@ -53,18 +79,22 @@ module MosesPG
         obj
       end
 
+      # @return [Integer, nil]
       def precision
-        0
+        nil
       end
 
+      # @return [Integer, nil]
       def scale
-        0
+        nil
       end
 
+      # @return [Integer]
       def oid
         self.class::OID
       end
 
+      # @return [String]
       def to_s
         ivars = []
         [:@precision, :@scale].each do |ivar|

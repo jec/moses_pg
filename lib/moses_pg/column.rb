@@ -14,10 +14,48 @@ require 'moses_pg/datatype'
 
 module MosesPG
 
+  #
+  # Contains metadata for a column
+  #
   class Column
 
-    attr_reader :name, :type, :table_oid, :table_attr_num, :oid, :type_length, :mod, :format
+    # @return [String] The column name
+    attr_reader :name
 
+    # @return [Datatype] The +Datatype+ object used for translation
+    attr_reader :type
+
+    # @return [Integer] The OID of the table, if any
+    attr_reader :table_oid
+
+    # @return [Integer] The attribute number of the column in the table, if any
+    attr_reader :table_attr_num
+
+    # @return [Integer] The OID of the column value
+    attr_reader :oid
+
+    # @return [Integer] The length of the value's data type, if a fixed size
+    attr_reader :type_length
+
+    # @return [Integer] The type mod of the column value
+    attr_reader :mod
+
+    # @return [Integer] 0 for text or 1 for binary
+    attr_reader :format
+
+    #
+    # Creates a new +Column+ from the raw metadata returned by the server
+    #
+    # @param [String] name The column name
+    # @param [Integer] table_oid The OID of the table, if any
+    # @param [Integer] table_attr_num The attribute number of the column in the
+    #   table, if any
+    # @param [Integer] oid The OID of the column value
+    # @param [Integer] type_length The length of the value's data type, if a
+    #   fixed size
+    # @param [Integer] mod The type mod of the column value
+    # @param [Integer] format 0 for text or 1 for binary
+    #
     def initialize(name, table_oid, table_attr_num, oid, type_length, mod, format)
       @name = name
       @type = Datatype::Base.create(oid, mod)
@@ -29,14 +67,21 @@ module MosesPG
       @format = format
     end
 
+    #
+    # +true+ if the row data was returned as text
+    #
     def text?
       @format == 0
     end
 
+    #
+    # +true+ if the row data was returned as binary
+    #
     def binary?
       @format == 1
     end
 
+    # @return [String]
     def to_s
       "#<#{self.class.name} name=#{@name.inspect}, type=#{@type}, format=#{@format.inspect}>"
     end
