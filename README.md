@@ -7,6 +7,12 @@ described in the PostgreSQL manual, but many of the more exotic types do not
 yet have meaningful translations. Simple queries and multi-step queries
 (parse, bind/describe/execute) are working.
 
+MosesPG is currently being developed as pure Ruby, but this is not strictly a
+goal of the project. Eventually, if it is required for performance, parts will
+be coded as C extensions.
+
+## Example
+
 ```ruby
 require 'eventmachine'
 require 'moses_pg'
@@ -36,7 +42,7 @@ _produces:_
     #<MosesPG::Column name="now" type=#<MosesPG::Datatype::Timestamp precision=6> format=0>
     ["Hello World!", 954, 2012-03-14 23:26:33 -0400]
 
-Note that the last column is a Ruby Time object.
+Note that the last column has been translated to a Ruby Time object.
 
 ## Dependencies
 
@@ -46,9 +52,9 @@ Note that the last column is a Ruby Time object.
 
 * [state_machine](https://github.com/pluginaweek/state_machine)
 
-## Design goals
+## Features
 
-Once completed, MosesPG will have the following features:
+### Implemented features
 
 * Single-threaded, event-driven access to PostgreSQL, with notification of
 completed queries via EventMachine&rsquo;s Deferrables
@@ -56,13 +62,20 @@ completed queries via EventMachine&rsquo;s Deferrables
 * Built-in per-connection serialization of queries (no need to wait for one
 query to complete before submitting another)
 
-* Translation to native Ruby types
+* Translation to native Ruby types (though not all types yet have meaningful
+translations)
 
-## Anti-design goals
+### Planned features
 
-MosesPG is currently being developed as pure Ruby, but this is not strictly a
-goal of the project. Eventually, if it is required for performance, parts will
-be coded as C extensions.
+* SSL session encryption
+
+* Funtion call interface
+
+* COPY in/out operations
+
+## License
+
+MosesPG is licensed under the three-clause BSD license.
 
 ## What&rsquo;s up with the name?
 
