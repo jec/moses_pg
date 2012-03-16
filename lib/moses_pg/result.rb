@@ -164,7 +164,7 @@ module MosesPG
 
     def current_result
       if @result.last.finished?
-        res = Result.new(connection)
+        res = Result.new(@connection)
         @result << res
         yield(res)
       else
