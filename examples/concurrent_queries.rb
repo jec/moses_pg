@@ -14,7 +14,7 @@ require 'logging'
 require 'optparse'
 
 # process command line
-options = {user: 'jim', password: 'jim'}
+options = {user: 'mosespg', password: 'mosespg'}
 OptionParser.new do |opt|
   opt.on('-H HOST', 'Connect to PostgreSQL on HOST (default: unix socket)') { |h| options[:host] = h }
   opt.on('-P PORT', Integer, 'Connect to PostgreSQL on PORT (default: 5432)') { |p| options[:port] = p }

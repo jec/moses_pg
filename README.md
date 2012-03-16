@@ -15,7 +15,9 @@ be coded as C extensions.
 
 * Ruby 1.9
 
-* [Eventmachine](https://github.com/eventmachine/eventmachine)
+* [EventMachine](https://github.com/eventmachine/eventmachine)
+
+* [EM-Synchrony](https://github.com/igrigorik/em-synchrony)
 
 * [state_machine](https://github.com/pluginaweek/state_machine)
 
@@ -26,6 +28,9 @@ be coded as C extensions.
 * Single-threaded, event-driven access to PostgreSQL, with notification of
 completed queries via EventMachine&rsquo;s Deferrables
 
+* Optional synchronous query methods (e.g. `#execute!` instead of `#execute`) that
+  block until completion
+
 * Built-in per-connection serialization of queries (no need to wait for one
 query to complete before submitting another)
 
@@ -33,9 +38,6 @@ query to complete before submitting another)
 translations)
 
 ### Planned features
-
-* Declaration of parameter types using `Datatype` values rather than
-  the raw OIDs
 
 * SSL session encryption
 
@@ -50,11 +52,10 @@ translations)
 Simple queries use the `#execute` method and receive a `Result` through the `#callback`.
 
 ```ruby
-require 'eventmachine'
 require 'moses_pg'
 
 EM.run do
-  defer = MosesPG.connect(user: 'jim', password: 'jim')
+  defer = MosesPG.connect(user: 'mosespg', password: 'mosespg')
   defer.callback do |conn|
     defer1 = conn.execute("SELECT 'Hello World!' AS hello, 954 AS area_code, localtimestamp AS now")
     defer1.callback do |result|
@@ -86,15 +87,17 @@ For prepared statements, use `#prepare` to parse and store the SQL, and `#execut
 to run it later.
 
 ```ruby
+require 'moses_pg'
+
 EM.run do
-  defer = MosesPG.connect(user: 'jim', password: 'jim')
+  defer = MosesPG.connect(user: 'mosespg', password: 'mosespg')
   defer.callback do |conn|
     defer1 = conn.prepare('stmt1', "SELECT $1::varchar(30) AS hello, $2::int AS area_code, $3::timestamp AS now")
     defer1.callback do
       defer2 = conn.execute_prepared('stmt1', 'Hello world!', 954, Time.now)
       defer2.callback do |result|
-        result.first.columns.each { |c| puts c }
-        result.first.each_row_as_native { |r| p r }
+        result.columns.each { |c| puts c }
+        result.each_row_as_native { |r| p r }
         EM.stop
       end
       defer2.errback { |errstr| puts "ERROR: #{errstr}"; EM.stop }
@@ -110,9 +113,14 @@ end
 
 _produces:_
 
+    #<MosesPG::Column name="hello", type=#<MosesPG::Datatype::Varchar precision=30>, format=0>
+    #<MosesPG::Column name="area_code", type=#<MosesPG::Datatype::Integer >, format=0>
+    #<MosesPG::Column name="now", type=#<MosesPG::Datatype::Timestamp precision=6>, format=0>
+    ["Hello world!", 954, 2012-03-16 11:47:12 -0400]
+
 ## License
 
-MosesPG is licensed under the three-clause BSD license.
+MosesPG is licensed under the three-clause BSD license (see LICENSE.txt).
 
 ## What&rsquo;s up with the name?
 
