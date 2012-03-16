@@ -69,6 +69,9 @@ module MosesPG
     #
     # Yields the rows returned by the server, without type translation
     #
+    # This method performs no magic; it's equivalent to +#rows.each+. It's just
+    # here for symmetry with +#each_row_as_native+.
+    #
     # @yieldparam [Array<Object>] row
     # @return [Result]
     #

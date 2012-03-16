@@ -11,28 +11,33 @@
 #++
 
 require 'etc'
-require 'eventmachine'
+require 'em-synchrony'
 require 'moses_pg/message'
 require 'moses_pg/message/buffer'
 require 'moses_pg/result'
 require 'state_machine'
 
 #
-# MosesPG provides EventMachine-based access to PostgreSQL using version 3 of
-# their wire protocol. It is still under active development and incomplete. In
-# particular, type translation is implemented for most of the column data types
-# described in the PostgreSQL manual, but many of the more exotic types do not
-# yet have meaningful translations. Simple queries and multi-step queries
-# (parse, bind/describe/execute) are working.
+# MosesPG provides EventMachine-based access to PostgreSQL using version 3.0 of
+# their frontend/backend protocol.
 #
 module MosesPG
 
   #
-  # Convenience method to access Connection::connect
+  # Convenience method to access +Connection::connect+
   #
   # @return [EventMachine::Deferrable]
   #
   def self.connect(opts = {})
+    Connection.connect(opts)
+  end
+
+  #
+  # Convenience method to access +Connection::connect!+
+  #
+  # @return [Connection]
+  #
+  def self.connect!(opts = {})
     Connection.connect(opts)
   end
 
@@ -48,7 +53,24 @@ module MosesPG
   end
 
   #
-  # Provides a connection to PostgreSQL
+  # Manages a PostgreSQL connection 
+  #
+  # Each operation that submits data to the server is implemented by two
+  # methods: one with a bang (!) and one without.  The bang methods
+  # (+#connect!+, +#execute!+, +#prepare!+, +#execute_prepared!+) block until
+  # the command is completed and return the appropriate data. The non-bang
+  # methods (+#connect+, +#execute+, +#prepare+, +#execute_prepared+) do not
+  # block and instead return a +Deferrable+ immediately. Data returned from the
+  # server is passed through the +Deferrable+'s +#callback+ method.
+  #
+  # Since the PostgreSQL frontend/backend protocol messages carry no sequence
+  # numbers to identify which results belong to which queries, it is necessary
+  # to submit queries to the backend one at a time.  However, +Connection+
+  # takes care of this serialization for you.  It is not necessary to wait for
+  # a response to +Deferrable+ before submitting additional queries, either
+  # with the bang or non-bang methods.  The +Connection+ will queue the
+  # requests if necessary and run them in sequence as the PostgreSQL server
+  # responds with the previous results.
   #
   class Connection < ::EM::Connection
 
@@ -281,12 +303,15 @@ module MosesPG
     #
     # Called by +EventMachine::Connection+ once the connection is established
     #
+    # @return [Connection]
+    #
     def post_init
       send_message(MosesPG::Message::StartupMessage.new(@user, @dbname))
 
       # when we enter the ready state after connecting, send self to the
       # callback
       @result = FakeResult.new(self)
+      self
     end
 
     #
@@ -294,13 +319,18 @@ module MosesPG
     #
     # @param [Message] message The +Message+ object to send to the server
     #
+    # @return [Connection]
+    #
     def send_message(message)
       @logger.trace { "<<< #{message}" }
       send_data(message.dump)
+      self
     end
 
     #
     # Called by +EventMachine::Connection+ when data is received
+    #
+    # @return [Connection]
     #
     def receive_data(data)
       #@logger.trace { ">>> #{data.inspect}" }
@@ -309,13 +339,17 @@ module MosesPG
         @logger.trace { ">>> #{@message}" }
         send(@message.event, @message)
       end
+      self
     end
 
     #
     # Called by +EventMachine::Connection+ when the connection is closed
     #
+    # @return [Connection]
+    #
     def unbind
       @logger.debug 'Connection closed'
+      self
     end
 
     #
@@ -327,11 +361,8 @@ module MosesPG
     # message is sent to +#errback+, along with any partial +Result+ that
     # accumulated before the error.
     #
-    # @note It is not necessary to wait for a response to +Deferrable+ before
-    #   submitting additional queries.  The +Connection+ will queue the requests
-    #   if necessary and run them in sequence as the PostgreSQL server responds
-    #   with the previous results.
-    # @param [String] sql A single SQL command or multiple commands, separated by semicolons
+    # @param [String] sql A single SQL command or multiple commands, separated
+    #   by semicolons
     # @return [EventMachine::Deferrable]
     #
     def execute(sql)
@@ -339,9 +370,28 @@ module MosesPG
     end
 
     #
+    # Submits SQL command (or commands) to the PostgreSQL server, blocking
+    # until completed; returns an Array of +Result+s
+    #
+    # @param [String] sql A single SQL command or multiple commands, separated
+    #   by semicolons
+    # @return [Array<Result>]
+    #
+    def execute!(sql)
+      @logger.debug 'entering #execute!'
+      #result = Fiber.new do
+        r1 = execute(sql)
+        @logger.debug { "r1 = #{r1.inspect}" }
+        r2 = EM::Synchrony.sync(r1) 
+        @logger.debug { "r2 = #{r2.inspect}" }
+      #end.resume
+      @logger.debug 'leaving #execute!'
+      r2
+    end
+
+    #
     # Submits a single SQL command for parsing and returns a +Deferrable+
     #
-    # @note (see #execute)
     # @param [String] name A name used to refer to the SQL later for execution
     # @param [String] sql A single SQL command to be parsed and saved
     # @param [nil, Array<Integer>] datatypes The data type(s) to use for the parameters
@@ -353,6 +403,21 @@ module MosesPG
     end
 
     #
+    # Submits a single SQL command for parsing, blocking until completed;
+    # returns the +Connection+
+    #
+    # @param [String] name A name used to refer to the SQL later for execution
+    # @param [String] sql A single SQL command to be parsed and saved
+    # @param [nil, Array<Integer>] datatypes The data type(s) to use for the parameters
+    #   included in the SQL command, if any
+    # @return [Connection]
+    #
+    def prepare!(name, sql, datatypes = nil)
+      EM::Synchrony.sync(prepare(name, sql, datatypes))
+      self
+    end
+
+    #
     # Initiates the execution of a previously prepared SQL command and returns
     # a +Deferrable+
     #
@@ -361,14 +426,28 @@ module MosesPG
     # is sent to +#errback+, along with any partial +Result+ that accumulated
     # before the error.
     #
-    # @note (see #execute)
     # @param [String] name The name given to the SQL command when +#prepare+
     #   was called
-    # @param [Array<Object>] bindvars The values to bind to the placeholders in the SQL command, if any
+    # @param [Array<Object>] bindvars The values to bind to the placeholders in
+    #   the SQL command, if any
     # @return [EventMachine::Deferrable]
     #
     def execute_prepared(name, *bindvars)
       super
+    end
+
+    #
+    # Initiates the execution of a previously prepared SQL command, blocking
+    # until the command completes; returns a +Result+
+    #
+    # @param [String] name The name given to the SQL command when +#prepare+
+    #   was called
+    # @param [Array<Object>] bindvars The values to bind to the placeholders in
+    #   the SQL command, if any
+    # @return [Result]
+    #
+    def execute_prepared!(name, *bindvars)
+      EM::Synchrony.sync(execute_prepared(name, *bindvars))
     end
 
     private
@@ -419,7 +498,10 @@ module MosesPG
       last_succeeded = if @in_progress
         last_defer = @in_progress
         last_result = @result
-        lambda { last_defer.succeed(last_result.nil? ? nil : last_result.result) }
+        proc do
+          @logger.debug { "last_defer = #{last_defer.inspect}; last_result = #{last_result.inspect}" }
+          last_defer.succeed(last_result.nil? ? nil : last_result.result)
+        end
       end
 
       # reset and process the next command in the queue
@@ -430,7 +512,11 @@ module MosesPG
       end
 
       # call succeed on the previous deferrable
-      last_succeeded.call if last_succeeded
+      if last_succeeded
+        @logger.debug { "calling #succeed for previous Deferrable" }
+        #EM.next_tick {
+        last_succeeded.call #}
+      end
       @logger.debug 'leaving #_finish_previous_query'
     end
 
