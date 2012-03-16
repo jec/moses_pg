@@ -53,9 +53,10 @@ module MosesPG
   # not block and instead return a +Deferrable+ immediately. Data returned from
   # the server is passed through the +Deferrable+'s +#callback+ method.
   #
-  # If you intend to call any of the bang methods, then you must start
-  # EventMachine's reactor using +EM::synchrony+ instead of +EM::run+. Otherwise,
-  # you will get the error <em>"can't yield from root fiber."</em>
+  # If you intend to call any of the bang methods, then you must require
+  # +moses_pg/sync+ and start EventMachine's reactor using +EM::synchrony+
+  # instead of +EM::run+. If you use +EM::run+, you will get the error
+  # <em>"can't yield from root fiber"</em> when you call a bang method.
   #
   # Since the PostgreSQL frontend/backend protocol messages carry no sequence
   # numbers to identify which results belong to which queries, it is necessary
@@ -77,15 +78,15 @@ module MosesPG
         obj.logger.trace { "+++ On event #{trans.event}: #{trans.from_name} => #{trans.to_name}" }
       end
       # entering a failure state fails the query
-      after_transition any => :connection_failed, :do => :_fail_connection
-      after_transition any => :query_failed, :do => :_fail_query
-      after_transition any => :parse_failed, :do => :_fail_parse
-      after_transition any => :bind_failed, :do => :_fail_bind
-      after_transition any => :execute_failed, :do => :_fail_execute
+      after_transition any => :connection_failed, :do => :fail_connection
+      after_transition any => :query_failed, :do => :fail_query
+      after_transition any => :parse_failed, :do => :fail_parse
+      after_transition any => :bind_failed, :do => :fail_bind
+      after_transition any => :execute_failed, :do => :fail_execute
 
       # entering the ready state checks the query queue and calls succeed for
       # the previous command
-      after_transition any => :ready, :do => :_finish_previous_query
+      after_transition any => :ready, :do => :finish_previous_query
 
       # when the bind is done, describe and execute the portal
       after_transition :bind_in_progress => :bind_completed, :do => :_send_portal_describe
@@ -439,8 +440,8 @@ module MosesPG
       super
     end
 
-    def _finish_previous_query
-      @logger.debug { "entering #_finish_previous_query; @in_progress = #{@in_progress.__id__}" }
+    def finish_previous_query
+      @logger.debug { "entering #finish_previous_query; @in_progress = #{@in_progress.__id__}" }
       # Create a closure w/the current values, since calling #succeed MUST
       # follow checking the queue
       last_succeeded = if @in_progress
@@ -471,7 +472,7 @@ module MosesPG
         #EM.next_tick {
         last_succeeded.call #}
       end
-      @logger.debug 'leaving #_finish_previous_query'
+      @logger.debug 'leaving #finish_previous_query'
     end
 
     def _send(action, args, defer = nil)
@@ -514,16 +515,16 @@ module MosesPG
       execute_sent
     end
 
-    def _fail_connection
+    def fail_connection
       @in_progress.fail(@message.errors['M'])
     end
-    alias :_fail_parse :_fail_connection
-    alias :_fail_bind :_fail_connection
+    alias :fail_parse :fail_connection
+    alias :fail_bind :fail_connection
 
-    def _fail_query
+    def fail_query
       @in_progress.fail(@message.errors['M'], @result.result)
     end
-    alias :_fail_execute :_fail_query
+    alias :fail_execute :fail_query
 
     def generate_portal_name(statement_name)
       str = statement_name.to_s
