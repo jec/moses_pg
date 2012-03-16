@@ -97,7 +97,7 @@ module MosesPG
 
       def dump
         str = _dump
-        "#{self.class::Code}#{[str.size + 4].pack('N')}#{str}"
+        "#{self.class::Code}#{[str.size + 4].pack('N')}#{str}".force_encoding('binary')
       end
 
       def _dump
@@ -222,7 +222,7 @@ module MosesPG
       def initialize(statement_name, portal_name, values, format, result_format)
         @statement_name = statement_name
         @portal_name = portal_name
-        @values = values
+        @values = values.collect { |o| o.to_s } # for now, send all values as strings
         @param_count = values.size
 
         @format = case format
@@ -267,7 +267,7 @@ module MosesPG
 
       def _dump
         buf = [@portal_name, "\0", @statement_name, "\0", ([@format.size] + @format + [@values.size]).pack('n*')]
-        @values.each { |value| buf << [value.size].pack('n') << value }
+        @values.each { |value| buf << [value.size].pack('N') << value }
         buf << ([@result_format.size] + @result_format).pack('n*')
         buf.join
       end

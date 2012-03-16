@@ -120,7 +120,7 @@ module MosesPG
         it 'returns the serialized message' do
           @message = Bind.new('stmt1', 'port1', ['this is a test', 'hello'], nil, nil)
           @message.dump.should ==
-              "B\x00\x00\x00\x2dport1\0stmt1\0\x00\x00\x00\x02\x00\x0ethis is a test\x00\x05hello\x00\x00"
+              "B\x00\x00\x00\x31port1\0stmt1\0\x00\x00\x00\x02\x00\x00\x00\x0ethis is a test\x00\x00\x00\x05hello\x00\x00"
         end
       end
     end
