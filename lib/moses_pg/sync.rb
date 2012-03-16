@@ -2,7 +2,7 @@
 
 #--
 # MosesPG -- a Ruby library for accessing PostgreSQL
-# Copyright (C) 2012 James Edwin Cain (user: moses_pg; domain: jcain.net)
+# Copyright (C) 2012 James Edwin Cain (user: mosespg; domain: jcain.net)
 #
 # This file is part of the MosesPG library.  This Library is free software; you
 # may redistribute it or modify it under the terms of the license contained in
@@ -52,7 +52,7 @@ module MosesPG
     # @return [Array<Result>]
     #
     def execute!(sql)
-      EM::Synchrony.sync(execute(sql)) 
+      EM::Synchrony.sync(execute(sql))
     end
 
     #

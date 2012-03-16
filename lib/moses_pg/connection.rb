@@ -2,7 +2,7 @@
 
 #--
 # MosesPG -- a Ruby library for accessing PostgreSQL
-# Copyright (C) 2012 James Edwin Cain (user: moses_pg; domain: jcain.net)
+# Copyright (C) 2012 James Edwin Cain (user: mosespg; domain: jcain.net)
 #
 # This file is part of the MosesPG library.  This Library is free software; you
 # may redistribute it or modify it under the terms of the license contained in
@@ -44,7 +44,7 @@ module MosesPG
   end
 
   #
-  # Manages a PostgreSQL connection 
+  # Manages a PostgreSQL connection
   #
   # Each operation that submits data to the server is implemented by two
   # methods: one with a bang (!) and one without.  The bang methods (e.g.
