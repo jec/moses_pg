@@ -11,7 +11,7 @@
 #++
 
 require 'etc'
-require 'em-synchrony'
+require 'eventmachine'
 require 'moses_pg/message'
 require 'moses_pg/message/buffer'
 require 'moses_pg/result'
@@ -32,15 +32,6 @@ module MosesPG
     Connection.connect(opts)
   end
 
-  #
-  # Convenience method to access +Connection::connect!+
-  #
-  # @return [Connection]
-  #
-  def self.connect!(opts = {})
-    Connection.connect(opts)
-  end
-
   FakeResult = Struct.new(:result) # @private
 
   class NullLogger # @private
@@ -56,12 +47,15 @@ module MosesPG
   # Manages a PostgreSQL connection 
   #
   # Each operation that submits data to the server is implemented by two
-  # methods: one with a bang (!) and one without.  The bang methods
-  # (+#connect!+, +#execute!+, +#prepare!+, +#execute_prepared!+) block until
-  # the command is completed and return the appropriate data. The non-bang
-  # methods (+#connect+, +#execute+, +#prepare+, +#execute_prepared+) do not
-  # block and instead return a +Deferrable+ immediately. Data returned from the
-  # server is passed through the +Deferrable+'s +#callback+ method.
+  # methods: one with a bang (!) and one without.  The bang methods (e.g.
+  # +#connect!+, +#execute!+) block until the command is completed and return
+  # the appropriate data. The non-bang methods (e.g. +#connect+, +#execute+) do
+  # not block and instead return a +Deferrable+ immediately. Data returned from
+  # the server is passed through the +Deferrable+'s +#callback+ method.
+  #
+  # If you intend to call any of the bang methods, then you must start
+  # EventMachine's reactor using +EM::synchrony+ instead of +EM::run+. Otherwise,
+  # you will get the error <em>"can't yield from root fiber."</em>
   #
   # Since the PostgreSQL frontend/backend protocol messages carry no sequence
   # numbers to identify which results belong to which queries, it is necessary
@@ -134,6 +128,7 @@ module MosesPG
         transition [:startup, :authorizing] => :connection_failed
         transition [:query_in_progress, :query_described, :query_data_received] => :query_failed
         transition :parse_in_progress => :parse_failed
+        transition :bind_in_progress => :bind_failed
         transition :execute_in_progress => :execute_failed
       end
       event :error_reset do
@@ -323,6 +318,8 @@ module MosesPG
     #
     def send_message(message)
       @logger.trace { "<<< #{message}" }
+      s = message.dump
+      @logger.trace { "<<< #{s.inspect} [#{s.size}] (#{s.encoding})" }
       send_data(message.dump)
       self
     end
@@ -370,26 +367,6 @@ module MosesPG
     end
 
     #
-    # Submits SQL command (or commands) to the PostgreSQL server, blocking
-    # until completed; returns an Array of +Result+s
-    #
-    # @param [String] sql A single SQL command or multiple commands, separated
-    #   by semicolons
-    # @return [Array<Result>]
-    #
-    def execute!(sql)
-      @logger.debug 'entering #execute!'
-      #result = Fiber.new do
-        r1 = execute(sql)
-        @logger.debug { "r1 = #{r1.inspect}" }
-        r2 = EM::Synchrony.sync(r1) 
-        @logger.debug { "r2 = #{r2.inspect}" }
-      #end.resume
-      @logger.debug 'leaving #execute!'
-      r2
-    end
-
-    #
     # Submits a single SQL command for parsing and returns a +Deferrable+
     #
     # @param [String] name A name used to refer to the SQL later for execution
@@ -400,21 +377,6 @@ module MosesPG
     #
     def prepare(name, sql, datatypes = nil)
       super
-    end
-
-    #
-    # Submits a single SQL command for parsing, blocking until completed;
-    # returns the +Connection+
-    #
-    # @param [String] name A name used to refer to the SQL later for execution
-    # @param [String] sql A single SQL command to be parsed and saved
-    # @param [nil, Array<Integer>] datatypes The data type(s) to use for the parameters
-    #   included in the SQL command, if any
-    # @return [Connection]
-    #
-    def prepare!(name, sql, datatypes = nil)
-      EM::Synchrony.sync(prepare(name, sql, datatypes))
-      self
     end
 
     #
@@ -434,20 +396,6 @@ module MosesPG
     #
     def execute_prepared(name, *bindvars)
       super
-    end
-
-    #
-    # Initiates the execution of a previously prepared SQL command, blocking
-    # until the command completes; returns a +Result+
-    #
-    # @param [String] name The name given to the SQL command when +#prepare+
-    #   was called
-    # @param [Array<Object>] bindvars The values to bind to the placeholders in
-    #   the SQL command, if any
-    # @return [Result]
-    #
-    def execute_prepared!(name, *bindvars)
-      EM::Synchrony.sync(execute_prepared(name, *bindvars))
     end
 
     private
@@ -493,18 +441,24 @@ module MosesPG
 
     def _finish_previous_query
       @logger.debug { "entering #_finish_previous_query; @in_progress = #{@in_progress.__id__}" }
-      # create a closure w/the current values, since calling #succeed MUST
+      # Create a closure w/the current values, since calling #succeed MUST
       # follow checking the queue
       last_succeeded = if @in_progress
         last_defer = @in_progress
         last_result = @result
         proc do
-          @logger.debug { "last_defer = #{last_defer.inspect}; last_result = #{last_result.inspect}" }
-          last_defer.succeed(last_result.nil? ? nil : last_result.result)
+          # For EM::Synchrony#sync to work its magic, code that calls the bang
+          # methods must occur in the context of a Fiber. Code executed in
+          # EventMachine callbacks (such as in #succeed, #fail, #next_tick,
+          # #add_timer) is outside the context of the Fiber created in
+          # EM::synchrony, and so must be given another Fiber context.
+          Fiber.new { last_defer.succeed(last_result.nil? ? nil : last_result.result) }.resume
         end
       end
 
-      # reset and process the next command in the queue
+      # Reset and process the next command in the queue. If there is one, this
+      # will change the state from ready, which is why we have to call #succeed
+      # on the previous query afterward.
       @in_progress = @result = nil
       unless @waiting.empty?
         action, args, defer = @waiting.shift
