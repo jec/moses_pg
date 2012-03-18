@@ -248,6 +248,18 @@ module MosesPG
     end
 
     #
+    # This method is intended for use by +Statement::bind+.
+    #
+    # @api private
+    # @param [MosesPG::Statement] statement The +Statement+ object being bound to
+    # @return [EventMachine::Deferrable]
+    #
+    def _describe_portal(statement)
+      @statement = statement
+      super
+    end
+
+    #
     # This method is intended for use by +Statement::execute+.
     #
     # @api private
@@ -305,7 +317,8 @@ module MosesPG
     end
 
     def row_description(*args)
-      @result.columns = @message.columns
+      @result.set_raw_columns(@message.columns)
+      @logger.trace { "Set the result columns to message columns; @result.columns = #{@result.columns.inspect}" }
       super
     end
 
@@ -380,7 +393,7 @@ module MosesPG
       bind_sent
     end
 
-    def _send_portal_describe(statement)
+    def _send_describe_portal(statement)
       send_message(MosesPG::Message::DescribePortal.new(statement.portal_name))
       send_message(MosesPG::Message::Flush.instance)
       @result = MosesPG::Result.new(self)

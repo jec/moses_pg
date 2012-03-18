@@ -28,5 +28,11 @@ namespace :spec do
   end
 end
 
+namespace :spec do
+  RSpec::Core::RakeTask.new('statement') do |t|
+    t.pattern = 'spec/**/statement_spec.rb'
+  end
+end
+
 require 'moses_pg'
 require 'tasks/state_machine'

@@ -26,6 +26,9 @@ module MosesPG
       event :bind_sent do
         transition [:prepared, :bound, :executed] => :bind_in_progress
       end
+      event :describe_sent do
+        transition :bound => :describe_in_progress
+      end
       event :execute_sent do
         transition [:prepared, :bound, :executed] => :execute_in_progress
       end
@@ -34,20 +37,41 @@ module MosesPG
       end
       event :action_completed do
         transition :bind_in_progress => :bound
+        transition :describe_in_progress => :described
         transition :execute_in_progress => :executed
         transition :close_in_progress => :closed
       end
       event :action_failed do
-        transition [:bind_in_progress, :execute_in_progress, :close_in_progress] => :prepared
+        transition [:bind_in_progress, :describe_in_progress, :execute_in_progress, :close_in_progress] => :prepared
       end
 
       state :prepared, :bound, :executed do
         def bind(*bindvars)
+          # TODO: close the previous portal if there is one, to release the
+          # resources on the backend
           @portal_name = generate_portal_name
-          deferrable = @connection._bind(self, bindvars)
+          deferrable = ::EM::DefaultDeferrable.new
+          defer1 = @connection._bind(self, bindvars)
           bind_sent
-          deferrable.callback { action_completed }
-          deferrable.errback { action_failed }
+          defer1.callback do
+            action_completed
+            defer2 = @connection._describe_portal(self)
+            describe_sent
+            defer2.callback do |result|
+              action_completed
+              @connection.logger.trace { "result = #{result.inspect}" }
+              @columns = result.columns
+              deferrable.succeed
+            end
+            defer2.errback do |errstr|
+              action_failed
+              deferrable.fail(errstr)
+            end
+          end
+          defer1.errback do |errstr|
+            action_failed
+            deferrable.fail(errstr)
+          end
           deferrable
         end
 
@@ -57,12 +81,21 @@ module MosesPG
             defer1 = bind(*bindvars)
             defer1.callback do
               defer2 = @connection._execute(self)
+              execute_sent
               defer2.callback do |result|
+                action_completed
+                result.columns = @columns
                 deferrable.succeed(result)
               end
-              defer2.errback { |errstr| deferrable.fail(errstr) }
+              defer2.errback do |errstr|
+                action_failed
+                deferrable.fail(errstr)
+              end
             end
-            defer1.errback { |errstr| deferrable.fail(errstr) }
+            defer1.errback do |errstr|
+              action_failed
+              deferrable.fail(errstr)
+            end
             deferrable
           else
             @connection._execute(self)

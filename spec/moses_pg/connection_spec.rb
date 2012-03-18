@@ -56,37 +56,41 @@ module MosesPG
       describe 'simple queries' do
         context 'when given an invalid statement' do
           it 'returns an error' do
-            defer = @conn.execute("SELECTx 1")
-            defer.errback do |errstr|
-              errstr.should match(/syntax error/i)
-              ::EM.stop
+            stop_em_on_error do
+              defer = @conn.execute("SELECTx 1")
+              defer.errback do |errstr|
+                errstr.should match(/syntax error/i)
+                ::EM.stop
+              end
+              defer.callback { |results| fail '#callback should not be called' }
             end
-            defer.callback { |results| fail '#callback should not be called' }
           end
         end
 
         context 'when given valid SELECT statements' do
           it 'returns an array of Results, one for each query' do
-            defer = @conn.execute("SELECT 12345::int AS t_int, 123456789012::bigint AS t_bigint, 123::smallint AS t_smallint")
-            defer.callback do |results|
-              results.size.should == 1
-              rows = results.first.rows
-              rows.size.should == 1
-              rows.first.should == ["12345", "123456789012", "123"]
-              results.first.each_row_as_native do |row|
-                row.should == [12345, 123456789012, 123]
-              end
-              results.first.columns.collect { |c| c.name }.should == %w{t_int t_bigint t_smallint}
+            stop_em_on_error do
+              defer = @conn.execute("SELECT 12345::int AS t_int, 123456789012::bigint AS t_bigint, 123::smallint AS t_smallint")
+              defer.callback do |results|
+                results.size.should == 1
+                rows = results.first.rows
+                rows.size.should == 1
+                rows.first.should == ["12345", "123456789012", "123"]
+                results.first.each_row_as_native do |row|
+                  row.should == [12345, 123456789012, 123]
+                end
+                results.first.columns.collect { |c| c.name }.should == %w{t_int t_bigint t_smallint}
 
-              defer1 = @conn.execute("SELECT 12345::int AS t_int; SELECT 123456789012::bigint AS t_bigint")
-              defer1.callback do |results|
-                results.size.should == 2
-                results.collect { |r| r.rows }.should == [[['12345']], [['123456789012']]]
-                ::EM.stop
+                defer1 = @conn.execute("SELECT 12345::int AS t_int; SELECT 123456789012::bigint AS t_bigint")
+                defer1.callback do |results|
+                  results.size.should == 2
+                  results.collect { |r| r.rows }.should == [[['12345']], [['123456789012']]]
+                  ::EM.stop
+                end
+                defer1.errback { |errstr| fail errstr }
               end
-              defer1.errback { |errstr| fail errstr }
+              defer.errback { |errstr| fail errstr }
             end
-            defer.errback { |errstr| fail errstr }
           end
         end
       end

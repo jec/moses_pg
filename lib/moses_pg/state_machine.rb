@@ -34,10 +34,6 @@ module MosesPG
           # the previous command
           after_transition any => :ready, :do => :finish_previous_query
 
-          # when the bind is done, describe and execute the portal
-          #after_transition :bind_in_progress => :bind_completed, :do => :_send_portal_describe
-          #after_transition :portal_describe_in_progress => :portal_described, :do => :_send_execute
-
           event :authentication_ok do
             transition [:startup, :authorizing] => :receive_server_data
           end
@@ -162,6 +158,11 @@ module MosesPG
               _send(:_send_bind, [statement, bindvars])
             end
 
+            def _describe_portal(statement)
+              @logger.debug 'in #_describe_portal; starting immediate'
+              _send(:_send_describe_portal, [statement])
+            end
+
             def _execute(statement)
               @logger.debug 'in #_execute; starting immediate'
               _send(:_send_execute, [statement])
@@ -196,6 +197,13 @@ module MosesPG
               @logger.debug 'in #_bind; queueing request'
               defer = ::EM::DefaultDeferrable.new
               @waiting << [:_send_bind, [statement, bindvars], defer]
+              defer
+            end
+
+            def _describe_portal(statement)
+              @logger.debug 'in #_describe_portal; queueing request'
+              defer = ::EM::DefaultDeferrable.new
+              @waiting << [:_send_describe_portal, [statement], defer]
               defer
             end
 

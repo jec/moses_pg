@@ -23,6 +23,10 @@ module MosesPG
   #
   class Result
 
+    # Returns the Array of +Column+s
+    # @return [Array<MosesPG::Column>]
+    attr_accessor :columns
+
     # Returns the +Connection+ that created this +Result+
     # @return [MosesPG::Connection]
     attr_reader :connection
@@ -30,10 +34,6 @@ module MosesPG
     # Returns the Array of Arrays of values
     # @return [Array<Array<Object>>]
     attr_reader :rows
-
-    # Returns the Array of +Column+s
-    # @return [Array<MosesPG::Column>]
-    attr_reader :columns
 
     # Returns the Array of Hashes representing any notices received
     # @return [Array<Hash>]
@@ -56,7 +56,7 @@ module MosesPG
     # @param [Array<Array<Object>>] cols The raw data values that describe the
     #   columns
     #
-    def columns=(cols)
+    def set_raw_columns(cols)
       @columns = cols.collect { |args| Column.new(*args) }
     end
 
@@ -183,8 +183,8 @@ module MosesPG
       @result = [Result.new(connection)]
     end
 
-    def columns=(cols)
-      current_result { |res| res.columns = cols }
+    def set_raw_columns(cols)
+      current_result { |res| res.set_raw_columns(cols) }
     end
 
     def <<(cols)
