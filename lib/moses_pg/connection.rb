@@ -406,14 +406,14 @@ module MosesPG
 
     def fail_parse
       @in_progress.fail(@message.errors['M'])
-      send_message(MosesPG::Message::Sync.new)
+      send_message(MosesPG::Message::Sync.instance)
     end
     alias :fail_bind :fail_parse
     alias :fail_close_statement :fail_parse
 
     def fail_query
       @in_progress.fail(@message.errors['M'], @result.result)
-      send_message(MosesPG::Message::Sync.new)
+      send_message(MosesPG::Message::Sync.instance)
     end
     alias :fail_execute :fail_query
 

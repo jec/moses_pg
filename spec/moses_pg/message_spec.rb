@@ -145,10 +145,10 @@ module MosesPG
       end
     end
 
-    describe ClosePrepared do
+    describe CloseStatement do
       describe '#dump' do
         it 'returns the serialized message' do
-          @message = ClosePrepared.new('statement1')
+          @message = CloseStatement.new('statement1')
           @message.dump.should == "C\x00\x00\x00\x10Sstatement1\0"
         end
       end
@@ -232,7 +232,7 @@ module MosesPG
     describe Flush do
       describe '#dump' do
         it 'returns the serialized message' do
-          @message = Flush.new
+          @message = Flush.instance
           @message.dump.should == "H\x00\x00\x00\x04"
         end
       end
@@ -356,7 +356,7 @@ module MosesPG
     describe Sync do
       describe '#dump' do
         it 'returns the serialized message' do
-          @message = Sync.new
+          @message = Sync.instance
           @message.dump.should == "S\x00\x00\x00\x04"
         end
       end
@@ -365,7 +365,7 @@ module MosesPG
     describe Terminate do
       describe '#dump' do
         it 'returns the serialized message' do
-          @message = Terminate.new
+          @message = Terminate.instance
           @message.dump.should == "X\x00\x00\x00\x04"
         end
       end

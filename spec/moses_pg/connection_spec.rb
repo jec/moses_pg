@@ -95,7 +95,7 @@ module MosesPG
         context 'when given an invalid statement' do
           it 'returns an error' do
             stop_em_on_error do
-              defer = @conn.prepare("stmt1", "SELECTx 12345::int AS t_int")
+              defer = @conn.prepare("SELECTx 12345::int AS t_int")
               defer.errback do |errstr|
                 errstr.should match(/syntax error/i)
                 ::EM.stop
@@ -108,9 +108,9 @@ module MosesPG
         context 'when given a valid SELECT statement' do
           it 'returns the query results' do
             stop_em_on_error do
-              defer = @conn.prepare("stmt1", "SELECT $1::int AS t_int, $2::varchar(30) AS t_varchar")
-              defer.callback do
-                defer1 = @conn.execute_prepared('stmt1', 12345, 'This is a test')
+              defer = @conn.prepare("SELECT $1::int AS t_int, $2::varchar(30) AS t_varchar")
+              defer.callback do |stmt|
+                defer1 = stmt.execute(12345, 'This is a test')
                 defer1.callback do |result|
                   result.rows.should == [['12345', 'This is a test']]
                   ::EM.stop
