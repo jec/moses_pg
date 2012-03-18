@@ -76,7 +76,7 @@ module MosesPG
     # @raise [MosesPG::Error]
     # @return [MosesPG::Connection]
     #
-    def prepare!(name, sql, datatypes = nil)
+    def prepare!(sql, datatypes = nil)
       Statement.prepare!(self, sql, datatypes)
     end
 
