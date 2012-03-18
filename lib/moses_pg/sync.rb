@@ -41,9 +41,13 @@ module MosesPG
     # @return [MosesPG::Connection]
     #
     def self.connect!(opts = {})
-      result = EM::Synchrony.sync(connect(opts))
-      raise MosesPG::Error, result if String === result
-      result
+      conn = EM::Synchrony.sync(connect(opts))
+      raise MosesPG::Error, conn if String === conn
+      # prepare transaction statements
+      #conn.prepare!('__start_transaction__', 'START TRANSACTION')
+      #conn.prepare!('__commit__', 'COMMIT')
+      #conn.prepare!('__rollback__', 'ROLLBACK')
+      conn
     end
 
     #
@@ -93,6 +97,96 @@ module MosesPG
       result = EM::Synchrony.sync(execute_prepared(name, *bindvars))
       raise MosesPG::Error, result if String === result
       result
+    end
+
+    def transaction!
+      execute_prepared!('__start_transaction__')
+      if block_given?
+        begin
+          yield
+        rescue
+          rollback!
+          raise
+        else
+          commit!
+        end
+      else
+        self
+      end
+    end
+
+    def commit!
+      execute_prepared!('__commit__')
+      self
+    end
+
+    def rollback!
+      execute_prepared!('__rollback__')
+      self
+    end
+
+  end
+
+  class Statement
+
+    #
+    # Submits a SQL command for parsing, blocking until completed; returns the
+    # +Statement+
+    #
+    # @param [MosesPG::Connection] connection The +Connection+ in which to prepare the SQL
+    # @param [String] sql The SQL text to prepare
+    # @param [Array<Integer>] datatypes 0 for text and 1 for binary
+    # @raise [MosesPG::Error]
+    # @return [MosesPG::Connection]
+    #
+    def self.prepare!(connection, sql, datatypes = nil)
+      result = EM::Synchrony.sync(prepare(connection, sql, datatypes))
+      raise MosesPG::Error, result if String === result
+    end
+
+    #
+    # Initiates the bind step for the +Statement+, blocking until completed;
+    # returns the +Statement+
+    #
+    # @param [Array<Object>] bindvars The values being bound
+    # @raise [MosesPG::Error]
+    # @return [MosesPG::Statement]
+    #
+    def bind!(*bindvars)
+      result = EM::Synchrony.sync(bind(*bindvars))
+      raise MosesPG::Error, result if String === result
+      self
+    end
+
+    #
+    # Initiates the execution step for the +Statement+, blocking until
+    # completed; returns the +Result+
+    #
+    # If the +Statement+ was not previously bound, or if +bindvars+ are given,
+    # then the method calls +#bind!+ and waits for completion before stating
+    # the execution.
+    #
+    # @param [Array<Object>] bindvars The values being bound
+    # @raise [MosesPG::Error]
+    # @return [MosesPG::Result]
+    #
+    def execute!(*bindvars)
+      result = EM::Synchrony.sync(execute(*bindvars))
+      raise MosesPG::Error, result if String === result
+      self
+    end
+
+    #
+    # Initiates the closing of the +Statement+, blocking until completed;
+    # returns the +Statement+
+    #
+    # @raise [MosesPG::Error]
+    # @return [MosesPG::Statement]
+    #
+    def close!
+      result = EM::Synchrony.sync(close)
+      raise MosesPG::Error, result if String === result
+      self
     end
 
   end

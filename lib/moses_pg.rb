@@ -11,5 +11,6 @@
 #++
 
 require 'moses_pg/connection'
+require 'moses_pg/statement'
 
 MPG = MosesPG

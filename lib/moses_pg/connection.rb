@@ -16,6 +16,7 @@ require 'moses_pg/state_machine'
 require 'moses_pg/message'
 require 'moses_pg/message/buffer'
 require 'moses_pg/result'
+require 'moses_pg/statement'
 
 #
 # MosesPG provides EventMachine-based access to PostgreSQL using version 3.0 of
@@ -79,7 +80,7 @@ module MosesPG
     # @return [Hash]
     attr_reader :server_params
 
-    # Sets or retrieves the batch size used by +#execute_prepared+
+    # Sets or retrieves the batch size used by +#execute+
     #
     # A value of zero means there is no limit.
     #
@@ -127,7 +128,6 @@ module MosesPG
       @logger = opts[:logger] || NullLogger.new
       @batch_size = 0
       @server_params = {}
-      @portals = {}
       @waiting = []
     end
 
@@ -159,7 +159,7 @@ module MosesPG
     def send_message(message)
       @logger.trace { "<<< #{message}" }
       s = message.dump
-      @logger.trace { "<<< #{s.inspect} [#{s.size}] (#{s.encoding})" }
+      #@logger.trace { "<<< #{s.inspect} [#{s.size}] (#{s.encoding})" }
       send_data(message.dump)
       self
     end
@@ -209,32 +209,67 @@ module MosesPG
     #
     # Submits a single SQL command for parsing and returns a +Deferrable+
     #
+    # @param [String] sql A single SQL command to be parsed and saved
+    # @param [nil, Array<Integer>] datatypes The data type(s) to use for the parameters
+    #   included in the SQL command, if any
+    # @return [EventMachine::Deferrable]
+    #
+    def prepare(sql, datatypes = nil)
+      Statement.prepare(self, sql, datatypes)
+    end
+
+    #
+    # Submits a single SQL command for parsing and returns a +Deferrable+
+    #
+    # This method is intended for use by +Statement::create+.
+    #
+    # @api private
     # @param [String] name A name used to refer to the SQL later for execution
     # @param [String] sql A single SQL command to be parsed and saved
     # @param [nil, Array<Integer>] datatypes The data type(s) to use for the parameters
     #   included in the SQL command, if any
     # @return [EventMachine::Deferrable]
     #
-    def prepare(name, sql, datatypes = nil)
+    def _prepare(name, sql, datatypes = nil)
       super
     end
 
     #
-    # Initiates the execution of a previously prepared SQL command and returns
-    # a +Deferrable+
+    # This method is intended for use by +Statement::bind+.
     #
-    # If the command is successfully executed, then the +Result+ is sent to the
-    # +Deferrable+'s +#callback+ method.  If an error occurs, an error message
-    # is sent to +#errback+, along with any partial +Result+ that accumulated
-    # before the error.
-    #
-    # @param [String] name The name given to the SQL command when +#prepare+
-    #   was called
-    # @param [Array<Object>] bindvars The values to bind to the placeholders in
-    #   the SQL command, if any
+    # @api private
+    # @param [MosesPG::Statement] statement The +Statement+ object being bound to
+    # @param [Array<Object>] bindvars The values being bound
     # @return [EventMachine::Deferrable]
     #
-    def execute_prepared(name, *bindvars)
+    def _bind(statement, bindvars)
+      @statement = statement
+      super
+    end
+
+    #
+    # This method is intended for use by +Statement::execute+.
+    #
+    # @api private
+    # @param [MosesPG::Statement] statement The +Statement+ object being executed
+    # @return [EventMachine::Deferrable]
+    #
+    def _execute(statement)
+      @statement = statement
+      super
+    end
+
+    #
+    # Initiates the closing of a +Statement+ and returns a +Deferrable+
+    #
+    # This method is intended for use by +Statement::close+.
+    #
+    # @api private
+    # @param [MosesPG::Statement] statement The +Statement+ object being closed
+    # @return [EventMachine::Deferrable]
+    #
+    def _close_statement(statement)
+      @statement = statement
       super
     end
 
@@ -335,45 +370,52 @@ module MosesPG
 
     def _send_parse(name, sql, datatypes = nil)
       send_message(MosesPG::Message::Parse.new(name, sql, datatypes))
-      send_message(MosesPG::Message::Flush.new)
+      send_message(MosesPG::Message::Flush.instance)
       parse_sent
     end
 
-    def _send_bind(statement_name, *bindvars)
-      @statement_in_progress = statement_name
-      send_message(MosesPG::Message::Bind.new(statement_name, generate_portal_name(statement_name), bindvars, nil, nil))
-      send_message(MosesPG::Message::Flush.new)
+    def _send_bind(statement, bindvars)
+      send_message(MosesPG::Message::Bind.new(statement.name, statement.portal_name, bindvars, nil, nil))
+      send_message(MosesPG::Message::Flush.instance)
       bind_sent
     end
 
-    def _send_portal_describe
-      send_message(MosesPG::Message::DescribePortal.new(@portals[@statement_in_progress.to_s]))
-      send_message(MosesPG::Message::Flush.new)
+    def _send_portal_describe(statement)
+      send_message(MosesPG::Message::DescribePortal.new(statement.portal_name))
+      send_message(MosesPG::Message::Flush.instance)
       @result = MosesPG::Result.new(self)
       portal_describe_sent
     end
 
-    def _send_execute
-      send_message(MosesPG::Message::Execute.new(@portals[@statement_in_progress.to_s], @batch_size))
-      send_message(MosesPG::Message::Flush.new)
+    def _send_execute(statement)
+      send_message(MosesPG::Message::Execute.new(statement.portal_name, @batch_size))
+      send_message(MosesPG::Message::Flush.instance)
+      @result = MosesPG::Result.new(self)
       execute_sent
+    end
+
+    def _send_close_statement(statement)
+      send_message(MosesPG::Message::CloseStatement.new(statement.name))
+      send_message(MosesPG::Message::Flush.instance)
+      close_statement_sent
     end
 
     def fail_connection
       @in_progress.fail(@message.errors['M'])
     end
-    alias :fail_parse :fail_connection
-    alias :fail_bind :fail_connection
+
+    def fail_parse
+      @in_progress.fail(@message.errors['M'])
+      send_message(MosesPG::Message::Sync.new)
+    end
+    alias :fail_bind :fail_parse
+    alias :fail_close_statement :fail_parse
 
     def fail_query
       @in_progress.fail(@message.errors['M'], @result.result)
+      send_message(MosesPG::Message::Sync.new)
     end
     alias :fail_execute :fail_query
-
-    def generate_portal_name(statement_name)
-      str = statement_name.to_s
-      @portals[str] = "__P__#{str}"
-    end
 
   end
 

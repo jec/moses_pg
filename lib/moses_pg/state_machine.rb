@@ -28,14 +28,15 @@ module MosesPG
           after_transition any => :parse_failed, :do => :fail_parse
           after_transition any => :bind_failed, :do => :fail_bind
           after_transition any => :execute_failed, :do => :fail_execute
+          after_transition any => :close_statement_failed, :do => :fail_close_statement
 
           # entering the ready state checks the query queue and calls succeed for
           # the previous command
           after_transition any => :ready, :do => :finish_previous_query
 
           # when the bind is done, describe and execute the portal
-          after_transition :bind_in_progress => :bind_completed, :do => :_send_portal_describe
-          after_transition :portal_describe_in_progress => :portal_described, :do => :_send_execute
+          #after_transition :bind_in_progress => :bind_completed, :do => :_send_portal_describe
+          #after_transition :portal_describe_in_progress => :portal_described, :do => :_send_execute
 
           event :authentication_ok do
             transition [:startup, :authorizing] => :receive_server_data
@@ -77,6 +78,7 @@ module MosesPG
             transition :parse_in_progress => :parse_failed
             transition :bind_in_progress => :bind_failed
             transition :execute_in_progress => :execute_failed
+            transition :close_statement_in_progress => :close_statement_failed
           end
           event :error_reset do
             transition :parse_failed => :ready
@@ -97,10 +99,13 @@ module MosesPG
             transition :ready => :bind_in_progress
           end
           event :portal_describe_sent do
-            transition :bind_completed => :portal_describe_in_progress
+            transition :ready => :portal_describe_in_progress
           end
           event :execute_sent do
-            transition :portal_described => :execute_in_progress
+            transition :ready => :execute_in_progress
+          end
+          event :close_statement_sent do
+            transition :ready => :close_statement_in_progress
           end
           event :sync_sent do
           end
@@ -113,18 +118,21 @@ module MosesPG
             transition :parse_in_progress => :ready
           end
           event :bind_complete do
-            transition :bind_in_progress => :bind_completed
+            transition :bind_in_progress => :ready
+          end
+          event :close_complete do
+            transition :close_statement_in_progress => :ready
           end
           event :row_description do
             transition :query_in_progress => :query_described
-            transition :portal_describe_in_progress => :portal_described
+            transition :portal_describe_in_progress => :ready
           end
           event :data_row do
             transition [:query_described, :query_data_received] => :query_data_received
             transition :execute_in_progress => same
           end
           event :no_data do
-            transition :portal_describe_in_progress => :portal_described
+            transition :portal_describe_in_progress => :ready
           end
           event :portal_suspended do
             transition :execute_in_progress => same
@@ -144,14 +152,24 @@ module MosesPG
               _send(:_send_query, [sql])
             end
 
-            def prepare(name, sql, datatypes = nil)
-              @logger.debug 'in #prepare; starting immediate'
+            def _prepare(name, sql, datatypes = nil)
+              @logger.debug 'in #_prepare; starting immediate'
               _send(:_send_parse, [name, sql, datatypes])
             end
 
-            def execute_prepared(name, *bindvars)
-              @logger.debug 'in #execute_prepared; starting immediate'
-              _send(:_send_bind, [name, *bindvars])
+            def _bind(statement, bindvars)
+              @logger.debug 'in #_bind; starting immediate'
+              _send(:_send_bind, [statement, bindvars])
+            end
+
+            def _execute(statement)
+              @logger.debug 'in #_execute; starting immediate'
+              _send(:_send_execute, [statement])
+            end
+
+            def _close_statement(statement)
+              @logger.debug 'in #_close_statement; starting immediate'
+              _send(:_send_close_statement, [statement])
             end
           end
 
@@ -167,17 +185,31 @@ module MosesPG
               defer
             end
 
-            def prepare(name, sql, datatypes = nil)
-              @logger.debug 'in #prepare; queueing request'
+            def _prepare(name, sql, datatypes = nil)
+              @logger.debug 'in #_prepare; queueing request'
               defer = ::EM::DefaultDeferrable.new
               @waiting << [:_send_parse, [name, sql, datatypes], defer]
               defer
             end
 
-            def execute_prepared(name, *bindvars)
-              @logger.debug 'in #execute_prepared; queueing request'
+            def _bind(statement, bindvars)
+              @logger.debug 'in #_bind; queueing request'
               defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_bind, [name, *bindvars], defer]
+              @waiting << [:_send_bind, [statement, bindvars], defer]
+              defer
+            end
+
+            def _execute(statement)
+              @logger.debug 'in #_execute; queueing request'
+              defer = ::EM::DefaultDeferrable.new
+              @waiting << [:_send_execute, [statement], defer]
+              defer
+            end
+
+            def _close_statement(statement)
+              @logger.debug 'in #_close_statement; queueing request'
+              defer = ::EM::DefaultDeferrable.new
+              @waiting << [:_send_close_statement, [statement], defer]
               defer
             end
           end

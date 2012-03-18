@@ -11,6 +11,7 @@
 #++
 
 require 'set'
+require 'singleton'
 require 'stringio'
 require 'moses_pg/error'
 
@@ -312,7 +313,7 @@ module MosesPG
       Object_Code = 'P'
     end
 
-    class ClosePrepared < Close
+    class CloseStatement < Close
       Object_Code = 'S'
     end
 
@@ -404,6 +405,7 @@ module MosesPG
 
     class Flush < Base
       Code = 'H'
+      include Singleton
     end
 
     class NoData < Base
@@ -565,10 +567,12 @@ module MosesPG
 
     class Sync < Base
       Code = 'S'
+      include Singleton
     end
 
     class Terminate < Base
       Code = 'X'
+      include Singleton
     end
 
   end
