@@ -77,9 +77,7 @@ module MosesPG
     # @return [MosesPG::Connection]
     #
     def prepare!(name, sql, datatypes = nil)
-      result = EM::Synchrony.sync(prepare(name, sql, datatypes))
-      raise MosesPG::Error, result if String === result
-      self
+      Statement.prepare!(self, sql, datatypes)
     end
 
     #
