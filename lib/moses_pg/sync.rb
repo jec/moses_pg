@@ -37,10 +37,13 @@ module MosesPG
     # @option opts [String] :user The user name
     # @option opts [String] :password The password
     # @option opts [#trace, #debug, #info, #warn, #error, #fatal] :logger A logging object
-    # @return [Connection]
+    # @raise [MosesPG::Error]
+    # @return [MosesPG::Connection]
     #
     def self.connect!(opts = {})
-      EM::Synchrony.sync(connect(opts))
+      result = EM::Synchrony.sync(connect(opts))
+      raise MosesPG::Error, result if String === result
+      result
     end
 
     #
@@ -49,10 +52,13 @@ module MosesPG
     #
     # @param [String] sql A single SQL command or multiple commands, separated
     #   by semicolons
-    # @return [Array<Result>]
+    # @raise [MosesPG::Error]
+    # @return [Array<MosesPG::Result>]
     #
     def execute!(sql)
-      EM::Synchrony.sync(execute(sql))
+      result = EM::Synchrony.sync(execute(sql))
+      raise MosesPG::Error, result if String === result
+      result
     end
 
     #
@@ -63,10 +69,12 @@ module MosesPG
     # @param [String] sql A single SQL command to be parsed and saved
     # @param [nil, Array<Integer>] datatypes The data type(s) to use for the parameters
     #   included in the SQL command, if any
-    # @return [Connection]
+    # @raise [MosesPG::Error]
+    # @return [MosesPG::Connection]
     #
     def prepare!(name, sql, datatypes = nil)
-      EM::Synchrony.sync(prepare(name, sql, datatypes))
+      result = EM::Synchrony.sync(prepare(name, sql, datatypes))
+      raise MosesPG::Error, result if String === result
       self
     end
 
@@ -78,10 +86,13 @@ module MosesPG
     #   was called
     # @param [Array<Object>] bindvars The values to bind to the placeholders in
     #   the SQL command, if any
-    # @return [Result]
+    # @raise [MosesPG::Error]
+    # @return [MosesPG::Result]
     #
     def execute_prepared!(name, *bindvars)
-      EM::Synchrony.sync(execute_prepared(name, *bindvars))
+      result = EM::Synchrony.sync(execute_prepared(name, *bindvars))
+      raise MosesPG::Error, result if String === result
+      result
     end
 
   end

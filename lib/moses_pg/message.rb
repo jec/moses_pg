@@ -12,6 +12,7 @@
 
 require 'set'
 require 'stringio'
+require 'moses_pg/error'
 
 class Integer
   Max_16_Bit = 2**16 - 1
@@ -63,7 +64,9 @@ module MosesPG
       @@types = {}
 
       def self.register
-        raise "Message code #{self::Code} already registered by #{@@types[self::Code]}" if @@types.has_key?(self::Code)
+        if @@types.has_key?(self::Code)
+          raise MosesPG::Error, "Message code #{self::Code} already registered by #{@@types[self::Code]}"
+        end
         @@types[self::Code] = self
       end
 
@@ -121,7 +124,7 @@ module MosesPG
 
       def self.register
         if @@types.has_key?(self::Auth_Type)
-          raise "Authorization type #{self::Auth_Type} already registered by #{@@types[self::Auth_Type]}"
+          raise MosesPG::Error, "Authorization type #{self::Auth_Type} already registered by #{@@types[self::Auth_Type]}"
         end
         @@auth_types[self::Auth_Type] = self
       end

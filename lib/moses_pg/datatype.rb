@@ -12,6 +12,7 @@
 
 require 'time'
 require 'date'
+require 'moses_pg/error'
 
 module MosesPG
   module Datatype
@@ -33,7 +34,7 @@ module MosesPG
       # @param [Integer] oid The OID to associate with the calling class
       #
       def self.register(oid)
-        raise "OID #{oid} already registered" if @@types.has_key?(oid)
+        raise MosesPG::Error, "OID #{oid} already registered" if @@types.has_key?(oid)
         register!(oid)
       end
 
