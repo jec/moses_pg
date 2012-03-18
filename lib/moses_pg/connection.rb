@@ -138,7 +138,7 @@ module MosesPG
     #
     # Called by +EventMachine::Connection+ once the connection is established
     #
-    # @return [Connection]
+    # @return [MosesPG::Connection]
     #
     def post_init
       send_message(MosesPG::Message::StartupMessage.new(@user, @dbname))
@@ -154,7 +154,7 @@ module MosesPG
     #
     # @param [Message] message The +Message+ object to send to the server
     #
-    # @return [Connection]
+    # @return [MosesPG::Connection]
     #
     def send_message(message)
       @logger.trace { "<<< #{message}" }
@@ -167,7 +167,7 @@ module MosesPG
     #
     # Called by +EventMachine::Connection+ when data is received
     #
-    # @return [Connection]
+    # @return [MosesPG::Connection]
     #
     def receive_data(data)
       #@logger.trace { ">>> #{data.inspect}" }
@@ -182,7 +182,7 @@ module MosesPG
     #
     # Called by +EventMachine::Connection+ when the connection is closed
     #
-    # @return [Connection]
+    # @return [MosesPG::Connection]
     #
     def unbind
       @logger.debug 'Connection closed'
@@ -276,6 +276,11 @@ module MosesPG
 
     def data_row(*args)
       @result << @message.row
+      super
+    end
+
+    def notice_response(*args)
+      @result.add_notice(@message.fields)
       super
     end
 

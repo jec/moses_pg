@@ -69,6 +69,7 @@ module MosesPG
             transition :receive_server_data => same
           end
           event :notice_response do
+            transition any => same
           end
           event :error_response do
             transition [:startup, :authorizing] => :connection_failed

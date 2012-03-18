@@ -24,7 +24,7 @@ module MosesPG
   class Result
 
     # Returns the +Connection+ that created this +Result+
-    # @return [Connection]
+    # @return [MosesPG::Connection]
     attr_reader :connection
 
     # Returns the Array of Arrays of values
@@ -32,8 +32,12 @@ module MosesPG
     attr_reader :rows
 
     # Returns the Array of +Column+s
-    # @return [Array<Column>]
+    # @return [Array<MosesPG::Column>]
     attr_reader :columns
+
+    # Returns the Array of Hashes representing any notices received
+    # @return [Array<Hash>]
+    attr_reader :notices
 
     # Returns the tag that summarizes the action that was taken
     # @return [String]
@@ -42,6 +46,7 @@ module MosesPG
     def initialize(connection)
       @connection = connection
       @rows = []
+      @notices = []
     end
 
     #
@@ -59,10 +64,21 @@ module MosesPG
     # Adds a data row to the +Result+
     #
     # @param [Array<Object>] row A row of column values
-    # @return [Result]
+    # @return [MosesPG::Result]
     #
     def <<(row)
       @rows << row
+      self
+    end
+
+    #
+    # Adds a notice Hash to the +Result+
+    #
+    # @param [Hash] notice A Hash with the notice content
+    # @return [MosesPG::Result]
+    #
+    def add_notice(notice)
+      @notices << notice
       self
     end
 
@@ -73,7 +89,7 @@ module MosesPG
     # here for symmetry with +#each_row_as_native+.
     #
     # @yieldparam [Array<Object>] row
-    # @return [Result]
+    # @return [MosesPG::Result]
     #
     def each_row
       @rows.each { |row| yield(row) }
@@ -84,7 +100,7 @@ module MosesPG
     # Yields the rows with type translation
     #
     # @yieldparam [Array<Object>] row
-    # @return [Result]
+    # @return [MosesPG::Result]
     #
     def each_row_as_native
       @rows.each { |row| yield(Array.new(row.size) { |i| @columns[i].type.translate(row[i]) }) }
@@ -96,7 +112,7 @@ module MosesPG
     # _tag_
     #
     # @param [String] tag The tag that summarizes the action taken
-    # @return [Result]
+    # @return [MosesPG::Result]
     #
     def finish(tag)
       @tag = tag
@@ -114,7 +130,7 @@ module MosesPG
     # Called by the +Connection+ upon completion of a SQL command, or a series of
     # commands
     #
-    # @return [Result]
+    # @return [MosesPG::Result]
     #
     def result
       self
@@ -154,6 +170,11 @@ module MosesPG
 
     def <<(cols)
       current_result { |res| res << cols }
+      self
+    end
+
+    def add_notice(notice)
+      current_result { |res| res.add_notice(notice) }
       self
     end
 

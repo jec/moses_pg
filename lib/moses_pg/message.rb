@@ -411,6 +411,28 @@ module MosesPG
       register
     end
 
+    class NoticeResponse < Base
+      Code = 'N'
+      register
+      Fields = {'S' => 'Severity', 'C' => 'Code', 'M' => 'Message', 'D' => 'Detail', 'H' => 'Hint', 'P' => 'Position',
+          'p' => 'Internal position', 'q' => 'Internal query', 'W' => 'Where', 'F' => 'File', 'L' => 'Line', 'R' => 'Routine'}
+      attr_reader :fields
+      def parse(stream)
+        sio = StringIO.new(stream)
+        @fields = {}
+        begin
+          field = sio.read_exactly(1)
+          value = sio.read_to(0)
+          @fields[Fields[field] || field] = value
+        rescue IOError
+          break
+        end until false
+        self
+      ensure
+        sio.close
+      end
+    end
+
     class ParameterDescription < Base
       Code = 't'
       register

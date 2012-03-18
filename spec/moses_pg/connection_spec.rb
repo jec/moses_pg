@@ -10,7 +10,7 @@
 # contact the copyright holder.
 #++
 
-require 'moses_pg/connection'
+require 'moses_pg/sync'
 require 'logging'
 
 $dbname = ENV['PGDBNAME']
@@ -104,6 +104,7 @@ module MosesPG
             end
           end
         end
+
         context 'when given a valid SELECT statement' do
           it 'returns the query results' do
             stop_em_on_error do
@@ -121,9 +122,33 @@ module MosesPG
           end
         end
       end
-
     end
 
+    context 'when run with EM::synchrony' do
+      around(:each) do |example|
+        EM.synchrony do
+          @conn = Connection.connect!(dbname: $dbname, user: $user, password: $password, logger: $logger)
+          example.run
+          ::EM.stop
+        end
+      end
+
+      describe 'simple queries' do
+        after(:each) do
+          begin
+            @conn.execute!("DROP TABLE alpha")
+          rescue MosesPG::Error
+            # ignore
+          end
+        end
+        context 'when given a CREATE TABLE statement with implicit index' do
+          it 'returns the notices in the Result' do
+            results = @conn.execute!("CREATE TABLE alpha (id SERIAL)")
+            results.first.notices.first['Message'].should match(/create implicit sequence/)
+          end
+        end
+      end
+    end
   end
 
 end

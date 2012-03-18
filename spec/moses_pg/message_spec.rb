@@ -247,6 +247,16 @@ module MosesPG
       end
     end
 
+    describe NoticeResponse do
+      describe '::create' do
+        it 'creates an instance' do
+          message = MosesPG::Message.create('N', "SNOTICE\0MThis is a test\0?Unknown\0")
+          message.should be_instance_of(NoticeResponse)
+          message.fields.should == {'Severity' => 'NOTICE', 'Message' => 'This is a test', '?' => 'Unknown'}
+        end
+      end
+    end
+
     describe ParameterDescription do
       describe '::create' do
         it 'creates an instance' do
