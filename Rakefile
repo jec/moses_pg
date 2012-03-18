@@ -11,6 +11,12 @@ namespace :spec do
 end
 
 namespace :spec do
+  RSpec::Core::RakeTask.new('connection') do |t|
+    t.pattern = 'spec/**/connection_spec.rb'
+  end
+end
+
+namespace :spec do
   RSpec::Core::RakeTask.new('datatype') do |t|
     t.pattern = 'spec/**/datatype_spec.rb'
   end
@@ -21,3 +27,6 @@ namespace :spec do
     t.pattern = 'spec/**/message_spec.rb'
   end
 end
+
+require 'moses_pg'
+require 'tasks/state_machine'
