@@ -99,12 +99,31 @@ module MosesPG
     #
     # Yields the rows with type translation
     #
+    # This method is preferred over +#rows_as_native+ for large result sets,
+    # since it doesn't save the translated data in the +Result+ object.
+    #
     # @yieldparam [Array<Object>] row
     # @return [MosesPG::Result]
     #
     def each_row_as_native
       @rows.each { |row| yield(Array.new(row.size) { |i| @columns[i].type.translate(row[i]) }) }
       self
+    end
+
+    #
+    # Returns the rows with type translation
+    #
+    # This method saves the translated data in the +Result+ object, in case it
+    # is called again. For this reason, you may consider using
+    # +#each_row_as_native+ for large result sets.
+    #
+    # @return [Array<Array<Object>>]
+    #
+    def rows_as_native
+      unless @rows_as_native
+        @rows_as_native = @rows.collect { |row| Array.new(row.size) { |i| @columns[i].type.translate(row[i]) } }
+      end
+      @rows_as_native
     end
 
     #
