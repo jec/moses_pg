@@ -123,6 +123,9 @@ module MosesPG
             transition [:query_described, :query_data_received] => :query_data_received
             transition :execute_in_progress => same
           end
+          event :no_data do
+            transition :portal_describe_in_progress => :portal_described
+          end
           event :portal_suspended do
             transition :execute_in_progress => same
           end
