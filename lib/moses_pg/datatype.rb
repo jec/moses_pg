@@ -25,17 +25,24 @@ module MosesPG
 
       @@types = {}
 
-      private_class_method :new
-
       #
-      # Registers a subclass for an _oid_
+      # Registers a subclass for an _oid_, with fixed _precision_ and _scale_
       #
-      # @raise [RuntimeError] Raises an error if the _oid_ has already been registered
+      # If the datatype's precision or scale depends on the value of the type
+      # mod, then specify +nil+ for that parameter, and provide a
+      # +::decode_mod+ method to return the proper precision and scale based on
+      # the type mod.
+      #
+      # @raise [RuntimeError] If the _oid_ has already been registered
       # @param [Integer] oid The OID to associate with the calling class
+      # @param [Integer] precision The default precision to associate with the calling class
+      # @param [Integer] scale The default scale to associate with the calling class
+      # @return [Class] self
       #
-      def self.register(oid)
+      def self.register(oid, precision = nil, scale = nil)
         raise MosesPG::Error, "OID #{oid} already registered" if @@types.has_key?(oid)
-        register!(oid)
+        register!(oid, precision, scale)
+        self
       end
 
       #
@@ -45,11 +52,15 @@ module MosesPG
       # This one does *not* raise an error if _oid_ has already been registered,
       # which allows a user to configure a custom class for type translation.
       #
-      # @param [Integer] oid The OID to associate with the calling class
+      # @param (see .register)
+      # @return [Class] self
       #
-      def self.register!(oid)
+      def self.register!(oid, precision = nil, scale = nil)
         @@types[oid] = self
         self.const_set(:OID, oid)
+        self.const_set(:Precision, precision)
+        self.const_set(:Scale, scale)
+        self
       end
 
       # @return [Hash]
@@ -57,37 +68,57 @@ module MosesPG
         @@types
       end
 
-      #
-      # Creates an object from a subclass of +Base+ that is appropriate for the _oid_
-      #
-      # @param [Integer] oid The OID
-      # @param [Integer] mod The type mod
-      # @return [Datatype::Base]
-      def self.create(oid, mod)
+      # @return [Class]
+      def self.class_for(oid, mod)
         if klass = @@types[oid]
-          klass.class_eval { new(mod) }
+          name = klass.name_for(mod)
+          if Datatype.const_defined?(name)
+            Datatype.const_get(name)
+          else
+            new_klass = Class.new(klass)
+            Datatype.const_set(name, new_klass)
+            new_klass
+          end
         else
           STDERR.puts "OID #{oid.inspect} not recognized"
-          Unknown.class_eval { new(mod) }
+          Unknown
         end
       end
 
-      def initialize(mod) # @private
-        @mod = mod
+      # @param[Integer] mod The type mod for which to generate a class name
+      # @return [Symbol]
+      def self.name_for(mod)
+        a = ([self.name[/::([^:]+)$/, 1]] + decode_mod(mod))
+        a.compact!
+        a.join('_').to_sym
       end
 
-      def translate(obj)
+      # @param[Integer] mod The type mod to decode
+      # @return [Array<Integer, Integer>]
+      def self.decode_mod(mod)
+        [nil, nil]
+      end
+
+      # @param[Object] obj The object to translate
+      # @return [Object]
+      def self.translate(obj)
         obj
+      end
+
+      # @param[Object] value The initial value
+      # @return [MosesDB::Datatype::Base]
+      def initialize(value)
+        @value = value
       end
 
       # @return [Integer, nil]
       def precision
-        nil
+        self.class::Precision
       end
 
       # @return [Integer, nil]
       def scale
-        nil
+        self.class::Scale
       end
 
       # @return [Integer]
@@ -95,41 +126,45 @@ module MosesPG
         self.class::OID
       end
 
+      #
+      # Returns the format code (0 for text or 1 for binary) to use for binding
+      # an object of this type to a parameterized query
+      #
+      # @return [Integer]
+      def format_code
+        0
+      end
+
+      # @return [String]
+      def dump
+        @value.to_s
+      end
+
       # @return [String]
       def to_s
-        ivars = []
-        [:@precision, :@scale].each do |ivar|
-          ivars << "#{ivar.to_s[1..-1]}=#{instance_variable_get(ivar).inspect}" if instance_variable_defined?(ivar)
-        end
-        "#<#{self.class.name} #{ivars.join(', ')}>"
+        "#<#{self.class.name} precision=#{precision.inspect} scale=#{scale.inspect} value=#{@value.inspect}>"
       end
 
     end
 
     class Bigint < Base
-      register(20)
-      def translate(obj)
+      register(20, 19, 0)
+      def self.translate(obj)
         obj.to_i
-      end
-      def precision
-        19
       end
     end
 
     class Bit < Base
       register(1560)
-      def precision
-        @mod
+      def self.decode_mod(mod)
+        [mod, nil]
       end
     end
 
     class Boolean < Base
       register(16)
-      def translate(obj)
+      def self.translate(obj)
         obj == 't'
-      end
-      def precision
-        1
       end
     end
 
@@ -139,13 +174,11 @@ module MosesPG
 
     class BPChar < Base
       register(1042)
-      attr_reader :precision
-      def initialize(mod)
-        super
-        if @mod == -1
-          @precision = 0
+      def self.decode_mod(mod)
+        if mod == -1
+          [0, nil]
         else
-          @precision = @mod - 4
+          [mod - 4, nil]
         end
       end
     end
@@ -153,16 +186,22 @@ module MosesPG
     class Bytea < Base
       register(17)
       # assumes _obj_ is a String with the prefix \x followed by hex
-      def translate(obj)
+      def self.translate(obj)
         obj[2..-1].scan(/../).collect { |x| x.to_i(16) }.pack('c*')
       end
+      def format_code
+        1
+      end
+
+      # @return [String]
+      def dump
+        @value.to_s.force_encoding('binary')
+      end
+
     end
 
     class Char < Base
-      register(18)
-      def precision
-        1
-      end
+      register(18, 1)
     end
 
     class CIDR < Base
@@ -175,34 +214,22 @@ module MosesPG
 
     class Date < Base
       register(1082)
-      def translate(obj)
+      def self.translate(obj)
         ::Date.parse(obj)
       end
     end
 
     class Float4 < Base
-      register(700)
-      def translate(obj)
+      register(700, 6, 6)
+      def self.translate(obj)
         obj.to_f
-      end
-      def precision
-        6
-      end
-      def scale
-        6
       end
     end
 
     class Float8 < Base
-      register(701)
-      def translate(obj)
+      register(701, 15, 15)
+      def self.translate(obj)
         obj.to_f
-      end
-      def precision
-        15
-      end
-      def scale
-        15
       end
     end
 
@@ -211,21 +238,16 @@ module MosesPG
     end
 
     class Integer < Base
-      register(23)
-      def translate(obj)
+      register(23, 10, 0)
+      def self.translate(obj)
         obj.to_i
-      end
-      def precision
-        10
       end
     end
 
     class Interval < Base
       register(1186)
-      attr_reader :precision
-      def initialize(mod)
-        super
-        @precision = (@mod == -1) ? 6 : @mod
+      def self.decode_mod(mod)
+        [(mod == -1) ? 6 : mod, nil]
       end
     end
 
@@ -247,26 +269,20 @@ module MosesPG
 
     class Numeric < Base
       register(1700)
-      attr_reader :precision, :scale
-      def initialize(mod)
-        super
-        if @mod == -1
-          @precision = @scale = nil
+      def self.decode_mod(mod)
+        if mod == -1
+          [nil, nil]
         else
-          @precision = ((@mod - 4) & 0xFFFF0000) >> 16
-          @scale = (@mod - 4) & 0xFFFF
+          [((mod - 4) & 0xFFFF0000) >> 16, (mod - 4) & 0xFFFF]
         end
       end
-      def translate(obj)
-        (@scale != 0) ? obj.to_f : obj.to_i
+      def self.translate(obj)
+        (self::Scale != 0) ? obj.to_f : obj.to_i
       end
     end
 
     class Oid < Base
-      register(26)
-      def precision
-        10
-      end
+      register(26, 10, 0)
     end
 
     class Path < Base
@@ -282,12 +298,9 @@ module MosesPG
     end
 
     class Smallint < Base
-      register(21)
-      def translate(obj)
+      register(21, 5, 0)
+      def self.translate(obj)
         obj.to_i
-      end
-      def precision
-        5
       end
     end
 
@@ -297,43 +310,35 @@ module MosesPG
 
     class Time < Base
       register(1083)
-      attr_reader :precision
-      def initialize(mod)
-        super
-        @precision = (@mod == -1) ? 6 : @mod
+      def self.decode_mod(mod)
+        [(mod == -1) ? 6 : mod, nil]
       end
     end
 
     class Timestamp < Base
       register(1114)
-      attr_reader :precision
-      def initialize(mod)
-        super
-        @precision = (@mod == -1) ? 6 : @mod
+      def self.decode_mod(mod)
+        [(mod == -1) ? 6 : mod, nil]
       end
-      def translate(obj)
+      def self.translate(obj)
         ::Time.parse(obj)
       end
     end
 
     class TimestampTZ < Base
       register(1184)
-      attr_reader :precision
-      def initialize(mod)
-        super
-        @precision = (@mod == -1) ? 6 : @mod
+      def self.decode_mod(mod)
+        [(mod == -1) ? 6 : mod, nil]
       end
-      def translate(obj)
+      def self.translate(obj)
         ::Time.parse(obj)
       end
     end
 
     class TimeTZ < Base
       register(1266)
-      attr_reader :precision
-      def initialize(mod)
-        super
-        @precision = (@mod == -1) ? 6 : @mod
+      def self.decode_mod(mod)
+        [(mod == -1) ? 6 : mod, nil]
       end
     end
 
@@ -355,23 +360,15 @@ module MosesPG
 
     class Varbit < Base
       register(1562)
-      attr_reader :precision
-      def initialize(mod)
-        super
-        @precision = (@mod == -1) ? 0 : @mod
+      def self.decode_mod(mod)
+        [(mod == -1) ? 0 : mod, nil]
       end
     end
 
     class Varchar < Base
       register(1043)
-      attr_reader :precision
-      def initialize(mod)
-        super
-        if @mod == -1
-          @precision = 0
-        else
-          @precision = @mod - 4
-        end
+      def self.decode_mod(mod)
+        [(mod == -1) ? 0 : mod - 4, nil]
       end
     end
 

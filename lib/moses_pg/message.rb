@@ -13,6 +13,7 @@
 require 'set'
 require 'singleton'
 require 'stringio'
+require 'moses_pg/datatype'
 require 'moses_pg/error'
 
 class Integer
@@ -223,55 +224,30 @@ module MosesPG
       Valid_Formats = [0, 1].to_set
       attr_reader :statement_name, :portal_name
 
-      def initialize(statement_name, portal_name, values, format, result_format)
+      def initialize(statement_name, portal_name, values)
         @statement_name = statement_name
         @portal_name = portal_name
-        @values = values.collect { |o| o.to_s } # for now, send all values as strings
         @param_count = values.size
-
-        @format = case format
-        when nil
-          []
-        when Fixnum
-          unless Valid_Formats.include?(format)
-            raise ArgumentError, "Invalid format #{format.inspect}; must be among #{Valid_Formats.to_a.join(", ")}"
-          end
-          [format]
-        else # assume Array
-          unless format.size == 1 || format.size == @param_count
-            expected = [1, @param_count].uniq.join(' or ')
-            raise ArgumentError,
-                "Number of format values does not match number of bind values: expected #{expected}, got #{format.size}"
-          end
-          format.each do |f|
-            unless Valid_Formats.include?(f)
-              raise ArgumentError, "Invalid format #{f.inspect}; must be among #{Valid_Formats.to_a.join(", ")}"
-            end
-          end
-          format
-        end
-
-        @result_format = case result_format
-        when nil
-          []
-        when Fixnum
-          unless Valid_Formats.include?(result_format)
-            raise ArgumentError, "Invalid result format #{result_format.inspect}; must be among #{Valid_Formats.to_a.join(", ")}"
-          end
-          [result_format]
-        else # assume Array
-          result_format.each do |f|
-            unless Valid_Formats.include?(f)
-              raise ArgumentError, "Invalid result format #{f.inspect}; must be among #{Valid_Formats.to_a.join(", ")}"
-            end
-          end
-          result_format
-        end
+        @values = values
+        @format = values.collect { |value| value.instance_of?(Datatype::Base) ? value.format_code : 0 }
+        @result_format = []
       end
 
       def _dump
         buf = [@portal_name, "\0", @statement_name, "\0", ([@format.size] + @format + [@values.size]).pack('n*')]
-        @values.each { |value| buf << [value.size].pack('N') << value }
+        @values.each do |value|
+          case value
+            when nil
+              nil
+              buf << -1
+            when Datatype::Base
+              str = value.dump
+              buf << [str.size].pack('N') << str
+            else
+              str = value.to_s
+              buf << [str.size].pack('N') << str
+          end
+        end
         buf << ([@result_format.size] + @result_format).pack('n*')
         buf.join
       end

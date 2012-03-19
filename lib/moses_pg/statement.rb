@@ -59,7 +59,6 @@ module MosesPG
             describe_sent
             defer2.callback do |result|
               action_completed
-              @connection.logger.trace { "result = #{result.inspect}" }
               @columns = result.columns
               deferrable.succeed
             end

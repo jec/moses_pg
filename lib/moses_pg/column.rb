@@ -58,7 +58,7 @@ module MosesPG
     #
     def initialize(name, table_oid, table_attr_num, oid, type_length, mod, format)
       @name = name
-      @type = Datatype::Base.create(oid, mod)
+      @type = Datatype::Base.class_for(oid, mod)
       @table_oid = table_oid
       @table_attr_num = table_attr_num
       @oid = oid

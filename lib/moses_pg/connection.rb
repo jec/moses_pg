@@ -300,7 +300,6 @@ module MosesPG
     end
 
     def parameter_status(*args)
-      @logger.debug { "in #parameter_status" }
       @server_params[@message.name] = @message.value
       super
     end
@@ -318,7 +317,6 @@ module MosesPG
 
     def row_description(*args)
       @result.set_raw_columns(@message.columns)
-      @logger.trace { "Set the result columns to message columns; @result.columns = #{@result.columns.inspect}" }
       super
     end
 
@@ -333,7 +331,7 @@ module MosesPG
     end
 
     def finish_previous_query
-      @logger.debug { "entering #finish_previous_query; @in_progress = #{@in_progress.__id__}" }
+      @logger.trace('entering #finish_previous_query')
       # Create a closure w/the current values, since calling #succeed MUST
       # follow checking the queue
       last_succeeded = if @in_progress
@@ -360,18 +358,18 @@ module MosesPG
 
       # call succeed on the previous deferrable
       if last_succeeded
-        @logger.debug { "calling #succeed for previous Deferrable" }
+        @logger.trace('calling #succeed for previous Deferrable')
         #EM.next_tick {
         last_succeeded.call #}
       end
-      @logger.debug 'leaving #finish_previous_query'
+      @logger.trace('leaving #finish_previous_query')
     end
 
     def _send(action, args, defer = nil)
-      @logger.debug { "entering #_send(#{action.inspect}, ...)" }
+      @logger.trace { "entering #_send(#{action.inspect}, ...)" }
       @in_progress = defer || ::EM::DefaultDeferrable.new
       send(action, *args)
-      @logger.debug { "leaving #_send(#{action.inspect}, ...); @in_progress = #{@in_progress.__id__}" }
+      @logger.trace { "leaving #_send(#{action.inspect}, ...); @in_progress = #{@in_progress.__id__}" }
       @in_progress
     end
 
@@ -388,7 +386,7 @@ module MosesPG
     end
 
     def _send_bind(statement, bindvars)
-      send_message(MosesPG::Message::Bind.new(statement.name, statement.portal_name, bindvars, nil, nil))
+      send_message(MosesPG::Message::Bind.new(statement.name, statement.portal_name, bindvars))
       send_message(MosesPG::Message::Flush.instance)
       bind_sent
     end

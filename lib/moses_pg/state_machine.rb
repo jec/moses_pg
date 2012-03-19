@@ -143,32 +143,32 @@ module MosesPG
           #
           state :ready do
             def execute(sql)
-              @logger.debug 'in #execute; starting immediate'
+              @logger.trace 'in #execute; starting immediate'
               _send(:_send_query, [sql])
             end
 
             def _prepare(name, sql, datatypes = nil)
-              @logger.debug 'in #_prepare; starting immediate'
+              @logger.trace 'in #_prepare; starting immediate'
               _send(:_send_parse, [name, sql, datatypes])
             end
 
             def _bind(statement, bindvars)
-              @logger.debug 'in #_bind; starting immediate'
+              @logger.trace 'in #_bind; starting immediate'
               _send(:_send_bind, [statement, bindvars])
             end
 
             def _describe_portal(statement)
-              @logger.debug 'in #_describe_portal; starting immediate'
+              @logger.trace 'in #_describe_portal; starting immediate'
               _send(:_send_describe_portal, [statement])
             end
 
             def _execute(statement)
-              @logger.debug 'in #_execute; starting immediate'
+              @logger.trace 'in #_execute; starting immediate'
               _send(:_send_execute, [statement])
             end
 
             def _close_statement(statement)
-              @logger.debug 'in #_close_statement; starting immediate'
+              @logger.trace 'in #_close_statement; starting immediate'
               _send(:_send_close_statement, [statement])
             end
           end
@@ -179,42 +179,42 @@ module MosesPG
           #
           state all - :ready do
             def execute(sql)
-              @logger.debug 'in #execute; queueing request'
+              @logger.trace 'in #execute; queueing request'
               defer = ::EM::DefaultDeferrable.new
               @waiting << [:_send_query, [sql], defer]
               defer
             end
 
             def _prepare(name, sql, datatypes = nil)
-              @logger.debug 'in #_prepare; queueing request'
+              @logger.trace 'in #_prepare; queueing request'
               defer = ::EM::DefaultDeferrable.new
               @waiting << [:_send_parse, [name, sql, datatypes], defer]
               defer
             end
 
             def _bind(statement, bindvars)
-              @logger.debug 'in #_bind; queueing request'
+              @logger.trace 'in #_bind; queueing request'
               defer = ::EM::DefaultDeferrable.new
               @waiting << [:_send_bind, [statement, bindvars], defer]
               defer
             end
 
             def _describe_portal(statement)
-              @logger.debug 'in #_describe_portal; queueing request'
+              @logger.trace 'in #_describe_portal; queueing request'
               defer = ::EM::DefaultDeferrable.new
               @waiting << [:_send_describe_portal, [statement], defer]
               defer
             end
 
             def _execute(statement)
-              @logger.debug 'in #_execute; queueing request'
+              @logger.trace 'in #_execute; queueing request'
               defer = ::EM::DefaultDeferrable.new
               @waiting << [:_send_execute, [statement], defer]
               defer
             end
 
             def _close_statement(statement)
-              @logger.debug 'in #_close_statement; queueing request'
+              @logger.trace 'in #_close_statement; queueing request'
               defer = ::EM::DefaultDeferrable.new
               @waiting << [:_send_close_statement, [statement], defer]
               defer
