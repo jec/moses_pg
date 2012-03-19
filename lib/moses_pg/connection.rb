@@ -426,9 +426,14 @@ module MosesPG
 
     def fail_query
       @in_progress.fail(@message.errors['M'], @result.result)
+      @in_progress = nil
+    end
+
+    def fail_execute
+      @in_progress.fail(@message.errors['M'], @result.result)
+      @in_progress = nil
       send_message(MosesPG::Message::Sync.instance)
     end
-    alias :fail_execute :fail_query
 
   end
 

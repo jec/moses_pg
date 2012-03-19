@@ -70,7 +70,7 @@ module MosesPG
           end
           event :error_response do
             transition [:startup, :authorizing] => :connection_failed
-            transition [:query_in_progress, :query_described, :query_data_received] => :query_failed
+            transition [:query_in_progress, :rowset_query_in_progress, :empty_query_in_progress] => :query_failed
             transition :parse_in_progress => :parse_failed
             transition :bind_in_progress => :bind_failed
             transition :execute_in_progress => :execute_failed
@@ -81,8 +81,7 @@ module MosesPG
             transition :bind_failed => :ready
           end
           event :ready_for_query do
-            transition [:receive_server_data, :query_in_progress] => :ready
-            transition :query_failed => :ready
+            transition [:receive_server_data, :query_in_progress, :empty_query_in_progress, :query_failed] => :ready
           end
 
           event :query_sent do
@@ -107,7 +106,7 @@ module MosesPG
           end
 
           event :command_complete do
-            transition [:query_in_progress, :query_described, :query_data_received] => :query_in_progress
+            transition [:query_in_progress, :rowset_query_in_progress] => :query_in_progress
             transition :execute_in_progress => :ready
           end
           event :parse_complete do
@@ -120,11 +119,11 @@ module MosesPG
             transition :close_statement_in_progress => :ready
           end
           event :row_description do
-            transition :query_in_progress => :query_described
+            transition [:query_in_progress, :rowset_query_in_progress] => :rowset_query_in_progress
             transition :portal_describe_in_progress => :ready
           end
           event :data_row do
-            transition [:query_described, :query_data_received] => :query_data_received
+            transition [:query_in_progress, :rowset_query_in_progress] => :rowset_query_in_progress
             transition :execute_in_progress => same
           end
           event :no_data do
@@ -134,7 +133,7 @@ module MosesPG
             transition :execute_in_progress => same
           end
           event :empty_query_response do
-            transition :query_in_progress => same
+            transition :query_in_progress => :empty_query_in_progress
             transition :execute_in_progress => :ready
           end
 
