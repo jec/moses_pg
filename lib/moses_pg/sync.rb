@@ -140,6 +140,7 @@ module MosesPG
     def self.prepare!(connection, sql, datatypes = nil)
       result = EM::Synchrony.sync(prepare(connection, sql, datatypes))
       raise MosesPG::Error, result if String === result
+      result
     end
 
     #
@@ -171,7 +172,7 @@ module MosesPG
     def execute!(*bindvars)
       result = EM::Synchrony.sync(execute(*bindvars))
       raise MosesPG::Error, result if String === result
-      self
+      result
     end
 
     #
