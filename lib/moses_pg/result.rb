@@ -185,10 +185,15 @@ module MosesPG
 
     def set_raw_columns(cols)
       current_result { |res| res.set_raw_columns(cols) }
+      self
     end
 
-    def <<(cols)
-      current_result { |res| res << cols }
+    def columns
+      current_result { |res| res.columns }
+    end
+
+    def <<(row)
+      current_result { |res| res << row }
       self
     end
 
