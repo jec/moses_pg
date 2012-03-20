@@ -23,29 +23,48 @@ module MosesPG
   class Statement
 
     state_machine :state, :initial => :prepared do
-      event :bind_sent do
-        transition [:prepared, :bound, :executed] => :bind_in_progress
+      event :describe_statement_sent do
+        transition :prepared => :describe_statement_in_progress
       end
-      event :describe_sent do
-        transition :bound => :describe_in_progress
+      event :bind_sent do
+        transition [:statement_described, :bound, :executed] => :bind_in_progress
       end
       event :execute_sent do
-        transition [:prepared, :bound, :executed] => :execute_in_progress
+        transition [:statement_described, :bound, :executed] => :execute_in_progress
       end
       event :close_sent do
-        transition [:prepared, :bound, :executed] => :close_in_progress
+        transition [:statement_described, :bound, :executed] => :close_in_progress
       end
       event :action_completed do
+        transition :describe_statement_in_progress => :statement_described
         transition :bind_in_progress => :bound
-        transition :describe_in_progress => :described
         transition :execute_in_progress => :executed
         transition :close_in_progress => :closed
       end
       event :action_failed do
-        transition [:bind_in_progress, :describe_in_progress, :execute_in_progress, :close_in_progress] => :prepared
+        transition [:describe_statement_in_progress, :bind_in_progress, :execute_in_progress, :close_in_progress] => :prepared
       end
 
-      state :prepared, :bound, :executed do
+      state :prepared do
+        def describe
+          deferrable = ::EM::DefaultDeferrable.new
+          defer1 = @connection._describe_statement(self)
+          describe_statement_sent
+          defer1.callback do |result|
+            action_completed
+            @parameters = result.parameters
+            @columns = result.columns
+            deferrable.succeed
+          end
+          defer1.errback do |errstr|
+            action_failed
+            deferrable.fail(errstr)
+          end
+          deferrable
+        end
+      end
+
+      state :statement_described, :bound, :executed do
         def bind(*bindvars)
           # TODO: close the previous portal if there is one, to release the
           # resources on the backend
@@ -55,17 +74,7 @@ module MosesPG
           bind_sent
           defer1.callback do
             action_completed
-            defer2 = @connection._describe_portal(self)
-            describe_sent
-            defer2.callback do |result|
-              action_completed
-              @columns = result.columns
-              deferrable.succeed
-            end
-            defer2.errback do |errstr|
-              action_failed
-              deferrable.fail(errstr)
-            end
+            deferrable.succeed
           end
           defer1.errback do |errstr|
             action_failed
@@ -75,8 +84,8 @@ module MosesPG
         end
 
         def execute(*bindvars)
-          if prepared?
-            deferrable = ::EM::DefaultDeferrable.new
+          deferrable = ::EM::DefaultDeferrable.new
+          if statement_described? # statement hasn't been bound yet
             defer1 = bind(*bindvars)
             defer1.callback do
               defer2 = @connection._execute(self)
@@ -95,10 +104,20 @@ module MosesPG
               action_failed
               deferrable.fail(errstr)
             end
-            deferrable
           else
-            @connection._execute(self)
+            defer1 = @connection._execute(self)
+            execute_sent
+            defer1.callback do |result|
+              action_completed
+              result.columns = @columns
+              deferrable.succeed(result)
+            end
+            defer1.errback do |errstr|
+              action_failed
+              deferrable.fail(errstr)
+            end
           end
+          deferrable
         end
 
         def close
@@ -114,17 +133,22 @@ module MosesPG
     private_class_method :new
 
     # Returns the name of the prepared statement as stored in PostgreSQL's session
-    #
     # @return [String]
     attr_reader :name
 
     # Returns the name of the bound portal as stored in PostgreSQL's session
-    #
     # @return [String]
     attr_reader :portal_name
 
+    # Returns the +Column+s to be output upon execution, or +nil+ if not yet bound
+    # @return [Array<MosesPG::Column>]
+    attr_reader :columns
+
+    # Returns the +Datatype+ classes for the required parameters
+    # @return [Array<Class>]
+    attr_reader :parameters
+
     # Returns the +Connection+ to which this +Statement+ belongs
-    #
     # @return [MosesPG::Connection]
     attr_reader :connection
 
@@ -143,7 +167,12 @@ module MosesPG
       deferrable = ::EM::DefaultDeferrable.new
       name = generate_statement_name
       defer1 = connection._prepare(name, sql, datatypes)
-      defer1.callback { deferrable.succeed(new(connection, sql, name)) }
+      defer1.callback do
+        stmt = new(connection, sql, name)
+        defer2 = stmt.describe
+        defer2.callback { deferrable.succeed(stmt) }
+        defer2.errback { |errstr| deferrable.fail(errstr) }
+      end
       defer1.errback { |errstr| deferrable.fail(errstr) }
       deferrable
     end
@@ -184,6 +213,14 @@ module MosesPG
     #
     def execute(*bindvars)
       super
+    end
+
+    def result_format_codes
+      if @columns
+        @columns.collect { |col| col.type.result_format_code }
+      else
+        []
+      end
     end
 
     #

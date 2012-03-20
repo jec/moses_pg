@@ -135,6 +135,15 @@ module MosesPG
         0
       end
 
+      #
+      # Returns the format code (0 for text or 1 for binary) to use for
+      # outputting an object of this type from a query
+      #
+      # @return [Integer]
+      def self.result_format_code
+        0
+      end
+
       # @return [String]
       def dump
         @value.to_s
@@ -185,19 +194,15 @@ module MosesPG
 
     class Bytea < Base
       register(17)
-      # assumes _obj_ is a String with the prefix \x followed by hex
-      def self.translate(obj)
-        obj[2..-1].scan(/../).collect { |x| x.to_i(16) }.pack('c*')
-      end
       def format_code
         1
       end
-
-      # @return [String]
+      def self.result_format_code
+        1
+      end
       def dump
         @value.to_s.force_encoding('binary')
       end
-
     end
 
     class Char < Base

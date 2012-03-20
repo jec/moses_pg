@@ -217,28 +217,43 @@ module MosesPG
       Valid_Formats = [0, 1].to_set
       attr_reader :statement_name, :portal_name
 
-      def initialize(statement_name, portal_name, values)
+      def initialize(statement_name, portal_name, values, result_format)
         @statement_name = statement_name
         @portal_name = portal_name
         @param_count = values.size
         @values = values
         @format = values.collect { |value| value.kind_of?(Datatype::Base) ? value.format_code : 0 }
-        @result_format = []
+        @result_format = case result_format
+        when nil
+          []
+        when Integer
+          unless Valid_Formats.include?(result_format)
+            raise ArgumentError, "Invalid result format #{result_format.inspect}; must be among #{Valid_Formats.to_a.join(", ")}"
+          end
+          [result_format]
+        else
+          result_format.each do |f|
+            unless Valid_Formats.include?(f)
+              raise ArgumentError, "Invalid result format #{f.inspect}; must be among #{Valid_Formats.to_a.join(", ")}"
+            end
+          end
+          result_format
+        end
       end
 
       def _dump
         buf = [@portal_name, "\0", @statement_name, "\0", ([@format.size] + @format + [@values.size]).pack('n*')]
         @values.each do |value|
           case value
-            when nil
-              nil
-              buf << [-1].pack('N')
-            when Datatype::Base
-              str = value.dump
-              buf << [str.size].pack('N') << str
-            else
-              str = value.to_s
-              buf << [str.size].pack('N') << str
+          when nil
+            nil
+            buf << [-1].pack('N')
+          when Datatype::Base
+            str = value.dump
+            buf << [str.size].pack('N') << str
+          else
+            str = value.to_s
+            buf << [str.size].pack('N') << str
           end
         end
         buf << ([@result_format.size] + @result_format).pack('n*')
@@ -338,7 +353,7 @@ module MosesPG
       Object_Code = 'P'
     end
 
-    class DescribePrepared < Describe
+    class DescribeStatement < Describe
       Object_Code = 'S'
     end
 

@@ -93,7 +93,10 @@ module MosesPG
           event :bind_sent do
             transition :ready => :bind_in_progress
           end
-          event :portal_describe_sent do
+          event :describe_statement_sent do
+            transition :ready => :statement_describe_in_progress
+          end
+          event :describe_portal_sent do
             transition :ready => :portal_describe_in_progress
           end
           event :execute_sent do
@@ -118,9 +121,12 @@ module MosesPG
           event :close_complete do
             transition :close_statement_in_progress => :ready
           end
+          event :parameter_description do
+            transition :statement_describe_in_progress => same
+          end
           event :row_description do
             transition [:query_in_progress, :rowset_query_in_progress] => :rowset_query_in_progress
-            transition :portal_describe_in_progress => :ready
+            transition [:statement_describe_in_progress, :portal_describe_in_progress] => :ready
           end
           event :data_row do
             transition [:query_in_progress, :rowset_query_in_progress] => :rowset_query_in_progress
@@ -155,6 +161,11 @@ module MosesPG
             def _bind(statement, bindvars)
               @logger.trace 'in #_bind; starting immediate'
               _send(:_send_bind, [statement, bindvars])
+            end
+
+            def _describe_statement(statement)
+              @logger.trace 'in #_describe_statement; starting immediate'
+              _send(:_send_describe_statement, [statement])
             end
 
             def _describe_portal(statement)
@@ -196,6 +207,13 @@ module MosesPG
               @logger.trace 'in #_bind; queueing request'
               defer = ::EM::DefaultDeferrable.new
               @waiting << [:_send_bind, [statement, bindvars], defer]
+              defer
+            end
+
+            def _describe_statement(statement)
+              @logger.trace 'in #_describe_statement; queueing request'
+              defer = ::EM::DefaultDeferrable.new
+              @waiting << [:_send_describe_statement, [statement], defer]
               defer
             end
 

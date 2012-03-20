@@ -251,7 +251,19 @@ module MosesPG
     # This method is intended for use by +Statement::bind+.
     #
     # @api private
-    # @param [MosesPG::Statement] statement The +Statement+ object being bound to
+    # @param [MosesPG::Statement] statement The +Statement+ object
+    # @return [EventMachine::Deferrable]
+    #
+    def _describe_statement(statement)
+      @statement = statement
+      super
+    end
+
+    #
+    # This method is intended for use by +Statement::bind+.
+    #
+    # @api private
+    # @param [MosesPG::Statement] statement The +Statement+ object
     # @return [EventMachine::Deferrable]
     #
     def _describe_portal(statement)
@@ -312,6 +324,11 @@ module MosesPG
 
     def command_complete(*args)
       @result.finish(@message.tag)
+      super
+    end
+
+    def parameter_description(*args)
+      @result.set_raw_parameters(@message.oids)
       super
     end
 
@@ -386,16 +403,23 @@ module MosesPG
     end
 
     def _send_bind(statement, bindvars)
-      send_message(MosesPG::Message::Bind.new(statement.name, statement.portal_name, bindvars))
+      send_message(MosesPG::Message::Bind.new(statement.name, statement.portal_name, bindvars, statement.result_format_codes))
       send_message(MosesPG::Message::Flush.instance)
       bind_sent
+    end
+
+    def _send_describe_statement(statement)
+      send_message(MosesPG::Message::DescribeStatement.new(statement.name))
+      send_message(MosesPG::Message::Flush.instance)
+      @result = MosesPG::Result.new(self)
+      describe_statement_sent
     end
 
     def _send_describe_portal(statement)
       send_message(MosesPG::Message::DescribePortal.new(statement.portal_name))
       send_message(MosesPG::Message::Flush.instance)
       @result = MosesPG::Result.new(self)
-      portal_describe_sent
+      describe_portal_sent
     end
 
     def _send_execute(statement)

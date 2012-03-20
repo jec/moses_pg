@@ -27,6 +27,10 @@ module MosesPG
     # @return [Array<MosesPG::Column>]
     attr_accessor :columns
 
+    # Returns the Array of parameter +Datatype+ classes
+    # @return [Array<Class>]
+    attr_reader :parameters
+
     # Returns the +Connection+ that created this +Result+
     # @return [MosesPG::Connection]
     attr_reader :connection
@@ -58,6 +62,11 @@ module MosesPG
     #
     def set_raw_columns(cols)
       @columns = cols.collect { |args| Column.new(*args) }
+    end
+
+    # @param [Array<Integer>] oids The OIDs of the required parameters
+    def set_raw_parameters(oids)
+      @parameters = oids.collect { |oid| Datatype::Base.class_for(oid, -1) }
     end
 
     #
@@ -185,6 +194,11 @@ module MosesPG
 
     def set_raw_columns(cols)
       current_result { |res| res.set_raw_columns(cols) }
+      self
+    end
+
+    def set_raw_parameters(oids)
+      current_result { |res| res.set_raw_parameters(oids) }
       self
     end
 
