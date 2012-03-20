@@ -47,6 +47,10 @@ module MosesPG
     # @return [String]
     attr_reader :tag
 
+    # Returns the number of rows processed, if available
+    # @return [Integer]
+    attr_reader :processed_row_count
+
     def initialize(connection)
       @connection = connection
       @rows = []
@@ -144,6 +148,9 @@ module MosesPG
     #
     def finish(tag)
       @tag = tag
+      if nrows = tag[/\s(\d+)$/, 1]
+        @processed_row_count = nrows.to_i
+      end
       self
     end
 
