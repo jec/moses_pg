@@ -13,6 +13,20 @@
 module MosesPG
 
   class Error < RuntimeError
+    def initialize(message, severity, detail = nil, hint = nil, position = nil)
+      super(message)
+      @severity = severity
+      @detail = detail
+      @hint = hint
+      @position = position ? position.to_i : nil
+    end
+    def inspect
+      buf = [message]
+      buf.unshift(@severity) if @severity
+      buf << "(#{@detail})" if @detail
+      buf << "[#{@hint}]" if @hint
+      "#<#{self.class.name} #{buf.join(' ')}>"
+    end
   end
 
 end

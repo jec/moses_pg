@@ -198,23 +198,23 @@ module MosesPG
             defer1 = yield
           rescue Exception => e
             defer2 = rollback
-            defer2.callback { deferrable.fail(e.message) }
-            defer2.errback { deferrable.fail(e.message) }
+            defer2.callback { deferrable.fail(e) }
+            defer2.errback { deferrable.fail(e) }
           end
           if defer1
             defer1.callback do |result|
               defer2 = commit
               defer2.callback { deferrable.succeed(result) }
-              defer2.errback { deferrable.fail(errstr) }
+              defer2.errback { |err| deferrable.fail(err) }
             end
-            defer1.errback do |errstr|
+            defer1.errback do |err|
               defer2 = rollback
-              defer2.callback { deferrable.fail(errstr) }
-              defer2.errback { deferrable.fail(errstr) }
+              defer2.callback { deferrable.fail(err) }
+              defer2.errback { deferrable.fail(err) }
             end
           end
         end
-        defer0.errback { |errstr| deferrable.fail(errstr) }
+        defer0.errback { |err| deferrable.fail(err) }
         deferrable
       else
         defer0
@@ -474,23 +474,23 @@ module MosesPG
     end
 
     def fail_connection
-      @in_progress.fail(@message.errors['M'])
+      @in_progress.fail(@message.make_exception)
     end
 
     def fail_parse
-      @in_progress.fail(@message.errors['M'])
+      @in_progress.fail(@message.make_exception)
       send_message(MosesPG::Message::Sync.instance)
     end
     alias :fail_bind :fail_parse
     alias :fail_close_statement :fail_parse
 
     def fail_query
-      @in_progress.fail(@message.errors['M'], @result.result)
+      @in_progress.fail(@message.make_exception, @result.result)
       @in_progress = nil
     end
 
     def fail_execute
-      @in_progress.fail(@message.errors['M'], @result.result)
+      @in_progress.fail(@message.make_exception, @result.result)
       @in_progress = nil
       send_message(MosesPG::Message::Sync.instance)
     end

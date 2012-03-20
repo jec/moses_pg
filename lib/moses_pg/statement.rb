@@ -56,9 +56,9 @@ module MosesPG
             @columns = result.columns
             deferrable.succeed
           end
-          defer1.errback do |errstr|
+          defer1.errback do |err|
             action_failed
-            deferrable.fail(errstr)
+            deferrable.fail(err)
           end
           deferrable
         end
@@ -76,9 +76,9 @@ module MosesPG
             action_completed
             deferrable.succeed
           end
-          defer1.errback do |errstr|
+          defer1.errback do |err|
             action_failed
-            deferrable.fail(errstr)
+            deferrable.fail(err)
           end
           deferrable
         end
@@ -97,14 +97,14 @@ module MosesPG
                 result.columns = @columns
                 deferrable.succeed(result)
               end
-              defer2.errback do |errstr|
+              defer2.errback do |err|
                 action_failed
-                deferrable.fail(errstr)
+                deferrable.fail(err)
               end
             end
-            defer1.errback do |errstr|
+            defer1.errback do |err|
               action_failed
-              deferrable.fail(errstr)
+              deferrable.fail(err)
             end
           # else just execute
           else
@@ -115,9 +115,9 @@ module MosesPG
               result.columns = @columns
               deferrable.succeed(result)
             end
-            defer1.errback do |errstr|
+            defer1.errback do |err|
               action_failed
-              deferrable.fail(errstr)
+              deferrable.fail(err)
             end
           end
           deferrable
@@ -174,9 +174,9 @@ module MosesPG
         stmt = new(connection, sql, name)
         defer2 = stmt.describe
         defer2.callback { deferrable.succeed(stmt) }
-        defer2.errback { |errstr| deferrable.fail(errstr) }
+        defer2.errback { |err| deferrable.fail(err) }
       end
-      defer1.errback { |errstr| deferrable.fail(errstr) }
+      defer1.errback { |err| deferrable.fail(err) }
       deferrable
     end
 

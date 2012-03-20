@@ -380,10 +380,15 @@ module MosesPG
       Code = 'E'
       register
       attr_reader :errors
-
+      def initialize
+        @errors = {}
+      end
       def parse(stream)
         @errors = Hash[stream.scan(/(.)(.*?)\0/)]
         self
+      end
+      def make_exception
+        Error.new(@errors['M'], @errors['S'], @errors['D'], @errors['H'], @errors['P'])
       end
     end
 

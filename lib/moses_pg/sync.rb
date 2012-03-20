@@ -42,7 +42,7 @@ module MosesPG
     #
     def self.connect!(opts = {})
       conn = EM::Synchrony.sync(connect(opts))
-      raise MosesPG::Error, conn if String === conn
+      raise conn if conn.kind_of?(Error)
       conn
     end
 
@@ -57,7 +57,7 @@ module MosesPG
     #
     def execute!(sql)
       result = EM::Synchrony.sync(execute(sql))
-      raise MosesPG::Error, result if String === result
+      raise result if result.kind_of?(Error)
       result
     end
 
@@ -95,19 +95,19 @@ module MosesPG
 
     def start_transaction!
       result = EM::Synchrony.sync(_start_transaction)
-      raise MosesPG::Error, result if String === result
+      raise result if result.kind_of?(Error)
       self
     end
 
     def commit!
       result = EM::Synchrony.sync(commit)
-      raise MosesPG::Error, result if String === result
+      raise result if result.kind_of?(Error)
       self
     end
 
     def rollback!
       result = EM::Synchrony.sync(rollback)
-      raise MosesPG::Error, result if String === result
+      raise result if result.kind_of?(Error)
       self
     end
 
@@ -127,7 +127,7 @@ module MosesPG
     #
     def self.prepare!(connection, sql, datatypes = nil)
       result = EM::Synchrony.sync(prepare(connection, sql, datatypes))
-      raise MosesPG::Error, result if String === result
+      raise result if result.kind_of?(Error)
       result
     end
 
@@ -141,7 +141,7 @@ module MosesPG
     #
     def bind!(*bindvars)
       result = EM::Synchrony.sync(bind(*bindvars))
-      raise MosesPG::Error, result if String === result
+      raise result if result.kind_of?(Error)
       self
     end
 
@@ -159,7 +159,7 @@ module MosesPG
     #
     def execute!(*bindvars)
       result = EM::Synchrony.sync(execute(*bindvars))
-      raise MosesPG::Error, result if String === result
+      raise result if result.kind_of?(Error)
       result
     end
 
@@ -172,7 +172,7 @@ module MosesPG
     #
     def close!
       result = EM::Synchrony.sync(close)
-      raise MosesPG::Error, result if String === result
+      raise result if result.kind_of?(Error)
       self
     end
 
