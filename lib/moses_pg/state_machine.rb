@@ -78,11 +78,10 @@ module MosesPG
             transition :close_statement_in_progress => :close_statement_failed
           end
           event :error_reset do
-            transition :parse_failed => :ready
-            transition :bind_failed => :ready
+            transition [:parse_failed, :bind_failed] => :syncing
           end
           event :ready_for_query do
-            transition [:receive_server_data, :query_in_progress, :empty_query_in_progress, :query_failed] => :ready
+            transition [:receive_server_data, :query_in_progress, :empty_query_in_progress, :query_failed, :syncing] => :ready
           end
 
           event :query_sent do
