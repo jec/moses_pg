@@ -37,11 +37,6 @@ module MosesPG
 
   class NullLogger # @private
     def trace(*s) end
-    def debug(*s) end
-    def info(*s) end
-    def warn(*s) end
-    def error(*s) end
-    def fatal(*s) end
   end
 
   #
@@ -103,7 +98,7 @@ module MosesPG
     # @option opts [String] :dbname The database name
     # @option opts [String] :user The user name
     # @option opts [String] :password The password
-    # @option opts [#trace, #debug, #info, #warn, #error, #fatal] :logger A logging object
+    # @option opts [#trace] :logger A logging object with a #trace method
     # @return [EventMachine::Deferrable]
     #
     def self.connect(opts = {})
@@ -124,11 +119,15 @@ module MosesPG
       @user = opts[:user] || Etc.getlogin
       @password = opts[:password]
       @buffer = MosesPG::Message::Buffer.new
-      @in_progress = defer
       @logger = opts[:logger] || NullLogger.new
       @batch_size = 0
       @server_params = {}
       @waiting = []
+      @in_progress = defer
+
+      @start_xact_msg = Message::Query.new('START TRANSACTION')
+      @commit_msg = Message::Query.new('COMMIT')
+      @rollback_msg = Message::Query.new('ROLLBACK')
     end
 
     def batch_size=(batch_size)
@@ -185,8 +184,41 @@ module MosesPG
     # @return [MosesPG::Connection]
     #
     def unbind
-      @logger.debug 'Connection closed'
+      @logger.trace 'Connection closed'
       self
+    end
+
+    def transaction
+      defer0 = _start_transaction
+      if block_given?
+        deferrable = ::EM::DefaultDeferrable.new
+        defer0.callback do
+          defer1 = nil
+          begin
+            defer1 = yield
+          rescue Exception => e
+            defer2 = rollback
+            defer2.callback { deferrable.fail(e.message) }
+            defer2.errback { deferrable.fail(e.message) }
+          end
+          if defer1
+            defer1.callback do |result|
+              defer2 = commit
+              defer2.callback { deferrable.succeed(result) }
+              defer2.errback { deferrable.fail(errstr) }
+            end
+            defer1.errback do |errstr|
+              defer2 = rollback
+              defer2.callback { deferrable.fail(errstr) }
+              defer2.errback { deferrable.fail(errstr) }
+            end
+          end
+        end
+        defer0.errback { |errstr| deferrable.fail(errstr) }
+        deferrable
+      else
+        defer0
+      end
     end
 
     #
@@ -386,12 +418,18 @@ module MosesPG
       @logger.trace { "entering #_send(#{action.inspect}, ...)" }
       @in_progress = defer || ::EM::DefaultDeferrable.new
       send(action, *args)
-      @logger.trace { "leaving #_send(#{action.inspect}, ...); @in_progress = #{@in_progress.__id__}" }
+      @logger.trace { "leaving #_send(#{action.inspect}, ...)" }
       @in_progress
     end
 
     def _send_query(sql)
       send_message(MosesPG::Message::Query.new(sql))
+      @result = MosesPG::ResultGroup.new(self)
+      query_sent
+    end
+
+    def _send_query_message(message)
+      send_message(message)
       @result = MosesPG::ResultGroup.new(self)
       query_sent
     end

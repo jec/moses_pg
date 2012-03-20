@@ -22,6 +22,7 @@ module MosesPG
           after_transition any => any do |obj, trans|
             obj.logger.trace { "+++ On event #{trans.event}: #{trans.from_name} => #{trans.to_name}" }
           end
+
           # entering a failure state fails the query
           after_transition any => :connection_failed, :do => :fail_connection
           after_transition any => :query_failed, :do => :fail_query
@@ -133,7 +134,7 @@ module MosesPG
             transition :execute_in_progress => same
           end
           event :no_data do
-            transition :portal_describe_in_progress => :ready
+            transition [:statement_describe_in_progress, :portal_describe_in_progress] => :ready
           end
           event :portal_suspended do
             transition :execute_in_progress => same
@@ -151,6 +152,21 @@ module MosesPG
             def execute(sql)
               @logger.trace 'in #execute; starting immediate'
               _send(:_send_query, [sql])
+            end
+
+            def commit
+              @logger.trace 'in #commit; starting immediate'
+              _send(:_send_query_message, [@commit_msg])
+            end
+
+            def rollback
+              @logger.trace 'in #rollback; starting immediate'
+              _send(:_send_query_message, [@rollback_msg])
+            end
+
+            def _start_transaction
+              @logger.trace 'in #_start_transaction; starting immediate'
+              _send(:_send_query_message, [@start_xact_msg])
             end
 
             def _prepare(name, sql, datatypes = nil)
@@ -193,6 +209,27 @@ module MosesPG
               @logger.trace 'in #execute; queueing request'
               defer = ::EM::DefaultDeferrable.new
               @waiting << [:_send_query, [sql], defer]
+              defer
+            end
+
+            def commit
+              @logger.trace 'in #commit; queueing request'
+              defer = ::EM::DefaultDeferrable.new
+              @waiting << [:_send_query_message, [@commit_msg], defer]
+              defer
+            end
+
+            def rollback
+              @logger.trace 'in #rollback; queueing request'
+              defer = ::EM::DefaultDeferrable.new
+              @waiting << [:_send_query_message, [@rollback_msg], defer]
+              defer
+            end
+
+            def _start_transaction
+              @logger.trace 'in #_start_transaction; queueing request'
+              defer = ::EM::DefaultDeferrable.new
+              @waiting << [:_send_query_message, [@start_xact_msg], defer]
               defer
             end
 

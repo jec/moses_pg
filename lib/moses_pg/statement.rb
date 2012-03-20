@@ -85,7 +85,9 @@ module MosesPG
 
         def execute(*bindvars)
           deferrable = ::EM::DefaultDeferrable.new
-          if statement_described? # statement hasn't been bound yet
+          # if bindvars specified, or statement hasn't been bound yet, run the
+          # bind first
+          if !bindvars.empty? || statement_described?
             defer1 = bind(*bindvars)
             defer1.callback do
               defer2 = @connection._execute(self)
@@ -104,6 +106,7 @@ module MosesPG
               action_failed
               deferrable.fail(errstr)
             end
+          # else just execute
           else
             defer1 = @connection._execute(self)
             execute_sent

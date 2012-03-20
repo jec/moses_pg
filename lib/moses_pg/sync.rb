@@ -43,10 +43,6 @@ module MosesPG
     def self.connect!(opts = {})
       conn = EM::Synchrony.sync(connect(opts))
       raise MosesPG::Error, conn if String === conn
-      # prepare transaction statements
-      #conn.prepare!('__start_transaction__', 'START TRANSACTION')
-      #conn.prepare!('__commit__', 'COMMIT')
-      #conn.prepare!('__rollback__', 'ROLLBACK')
       conn
     end
 
@@ -80,46 +76,38 @@ module MosesPG
       Statement.prepare!(self, sql, datatypes)
     end
 
-    #
-    # Initiates the execution of a previously prepared SQL command, blocking
-    # until the command completes; returns a +Result+
-    #
-    # @param [String] name The name given to the SQL command when +#prepare+
-    #   was called
-    # @param [Array<Object>] bindvars The values to bind to the placeholders in
-    #   the SQL command, if any
-    # @raise [MosesPG::Error]
-    # @return [MosesPG::Result]
-    #
-    def execute_prepared!(name, *bindvars)
-      result = EM::Synchrony.sync(execute_prepared(name, *bindvars))
-      raise MosesPG::Error, result if String === result
-      result
-    end
-
     def transaction!
-      execute_prepared!('__start_transaction__')
+      start_transaction!
       if block_given?
         begin
-          yield
-        rescue
+          result = yield
+        rescue Exception => e
           rollback!
           raise
         else
           commit!
+          result
         end
       else
         self
       end
     end
 
+    def start_transaction!
+      result = EM::Synchrony.sync(_start_transaction)
+      raise MosesPG::Error, result if String === result
+      self
+    end
+
     def commit!
-      execute_prepared!('__commit__')
+      result = EM::Synchrony.sync(commit)
+      raise MosesPG::Error, result if String === result
       self
     end
 
     def rollback!
-      execute_prepared!('__rollback__')
+      result = EM::Synchrony.sync(rollback)
+      raise MosesPG::Error, result if String === result
       self
     end
 
