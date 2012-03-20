@@ -212,13 +212,6 @@ module MosesPG
     #
     # Represents the bind message to send to the server
     #
-    # _format_ must be one of +nil+ (use the default format for all), a single
-    # value (+0+ or +1+) to set the format for all, or an array of values to
-    # set the format for each parameter individually.
-    #
-    # _result_format_ is similar to _format_, except it sets the format for the
-    # columns in the result.
-    #
     class Bind < Base
       Code = 'B'
       Valid_Formats = [0, 1].to_set
@@ -229,7 +222,7 @@ module MosesPG
         @portal_name = portal_name
         @param_count = values.size
         @values = values
-        @format = values.collect { |value| value.instance_of?(Datatype::Base) ? value.format_code : 0 }
+        @format = values.collect { |value| value.kind_of?(Datatype::Base) ? value.format_code : 0 }
         @result_format = []
       end
 
@@ -239,7 +232,7 @@ module MosesPG
           case value
             when nil
               nil
-              buf << -1
+              buf << [-1].pack('N')
             when Datatype::Base
               str = value.dump
               buf << [str.size].pack('N') << str
