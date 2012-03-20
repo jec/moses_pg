@@ -202,9 +202,9 @@ module MosesPG
             defer2.errback { deferrable.fail(e) }
           end
           if defer1
-            defer1.callback do |result|
+            defer1.callback do |*args|
               defer2 = commit
-              defer2.callback { deferrable.succeed(result) }
+              defer2.callback { deferrable.succeed(*args) }
               defer2.errback { |err| deferrable.fail(err) }
             end
             defer1.errback do |err|
@@ -480,6 +480,7 @@ module MosesPG
     def fail_parse
       @in_progress.fail(@message.make_exception)
       send_message(MosesPG::Message::Sync.instance)
+      error_reset
     end
     alias :fail_bind :fail_parse
     alias :fail_close_statement :fail_parse
