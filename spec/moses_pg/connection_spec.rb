@@ -58,8 +58,8 @@ module MosesPG
           it 'returns an error' do
             stop_em_on_error do
               defer = @conn.execute("SELECTx 1")
-              defer.errback do |errstr|
-                errstr.should match(/syntax error/i)
+              defer.errback do |err|
+                err.message.should match(/syntax error/i)
                 ::EM.stop
               end
               defer.callback { |results| fail '#callback should not be called' }
@@ -87,9 +87,9 @@ module MosesPG
                   results.collect { |r| r.rows }.should == [[['12345']], [['123456789012']]]
                   ::EM.stop
                 end
-                defer1.errback { |errstr| fail errstr }
+                defer1.errback { |err| fail err }
               end
-              defer.errback { |errstr| fail errstr }
+              defer.errback { |err| fail err }
             end
           end
         end
@@ -100,8 +100,8 @@ module MosesPG
           it 'returns an error' do
             stop_em_on_error do
               defer = @conn.prepare("SELECTx 12345::int AS t_int")
-              defer.errback do |errstr|
-                errstr.should match(/syntax error/i)
+              defer.errback do |err|
+                err.message.should match(/syntax error/i)
                 ::EM.stop
               end
               defer.callback { |results| fail '#callback should not be called' }
@@ -119,9 +119,9 @@ module MosesPG
                   result.rows.should == [['12345', 'This is a test']]
                   ::EM.stop
                 end
-                defer1.errback { |errstr| fail errstr }
+                defer1.errback { |err| fail err }
               end
-              defer.errback { |errstr| fail errstr }
+              defer.errback { |err| fail err }
             end
           end
         end

@@ -106,23 +106,16 @@ module MosesPG
       describe '::new' do
         describe 'when given an invalid format' do
           it 'raises an error' do
-            expect { Bind.new('s1', 'p1', [], 5, nil) }.to raise_error(ArgumentError, /Invalid format/)
-            expect { Bind.new('s1', 'p1', [], [2], nil) }.to raise_error(ArgumentError, /Invalid format/)
-            expect { Bind.new('s1', 'p1', [], nil, 5) }.to raise_error(ArgumentError, /Invalid result format/)
-            expect { Bind.new('s1', 'p1', [], nil, [5]) }.to raise_error(ArgumentError, /Invalid result format/)
-          end
-        end
-        describe 'when format count does not match bind params count' do
-          it 'raises an error' do
-            expect { Bind.new('s1', 'p1', [1], [0, 0], nil) }.to raise_error(ArgumentError, /Number/)
+            expect { Bind.new('s1', 'p1', [], 5) }.to raise_error(ArgumentError, /Invalid result format/)
+            expect { Bind.new('s1', 'p1', [], [2]) }.to raise_error(ArgumentError, /Invalid result format/)
           end
         end
       end
       describe '#dump' do
         it 'returns the serialized message' do
-          @message = Bind.new('stmt1', 'port1', ['this is a test', 'hello'], nil, nil)
+          @message = Bind.new('stmt1', 'port1', ['this is a test', 'hello'], nil)
           @message.dump.should ==
-              "B\x00\x00\x00\x31port1\0stmt1\0\x00\x00\x00\x02\x00\x00\x00\x0ethis is a test\x00\x00\x00\x05hello\x00\x00"
+              "B\x00\x00\x00\x35port1\0stmt1\0\x00\x02\x00\x00\x00\x00\x00\x02\x00\x00\x00\x0ethis is a test\x00\x00\x00\x05hello\x00\x00"
         end
       end
     end
@@ -193,10 +186,10 @@ module MosesPG
       end
     end
 
-    describe DescribePrepared do
+    describe DescribeStatement do
       describe '#dump' do
         it 'returns the serialized message' do
-          @message = DescribePrepared.new('statement1')
+          @message = DescribeStatement.new('statement1')
           @message.dump.should == "D\x00\x00\x00\x10Sstatement1\0"
         end
       end

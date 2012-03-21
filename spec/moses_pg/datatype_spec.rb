@@ -34,7 +34,7 @@ module MosesPG
       [1042,      14, 'char(10)',         :BPChar_10,       'Hello     ',              'Hello     '           ],
       [  25,      -1, 'text',             :Text,            'Hello world',             'Hello world'          ],
       # binary
-      [  17,      -1, 'bytea',            :Bytea,         "\\x48656c6c6f20776f726c64", 'Hello world'          ],
+      [  17,      -1, 'bytea',            :Bytea,         "\\x48656c6c6f20776f726c64", "\\x48656c6c6f20776f726c64"],
       # date/time
       [1082,      -1, 'date',             :Date,          '2012-03-14',                ::Date.new(2012, 3, 14)],
       [1083,      -1, 'time',             :Time,          '12:34:56.789012',           '12:34:56.789012'      ],
