@@ -316,6 +316,21 @@ module MosesPG
     end
 
     #
+    # Initiates the closing of a +Statement+'s portal and returns a
+    # +Deferrable+
+    #
+    # This method is intended for use by +Statement::close+.
+    #
+    # @api private
+    # @param [MosesPG::Statement] statement The +Statement+ object
+    # @return [EventMachine::Deferrable]
+    #
+    def _close_portal(statement)
+      @statement = statement
+      super
+    end
+
+    #
     # Initiates the closing of a +Statement+ and returns a +Deferrable+
     #
     # This method is intended for use by +Statement::close+.
@@ -467,6 +482,12 @@ module MosesPG
       execute_sent
     end
 
+    def _send_close_portal(statement)
+      send_message(MosesPG::Message::ClosePortal.new(statement.portal_name))
+      send_message(MosesPG::Message::Flush.instance)
+      close_portal_sent
+    end
+
     def _send_close_statement(statement)
       send_message(MosesPG::Message::CloseStatement.new(statement.name))
       send_message(MosesPG::Message::Flush.instance)
@@ -483,6 +504,7 @@ module MosesPG
       error_reset
     end
     alias :fail_bind :fail_parse
+    alias :fail_close_portal :fail_parse
     alias :fail_close_statement :fail_parse
 
     def fail_query

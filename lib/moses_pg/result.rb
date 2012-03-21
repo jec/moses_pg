@@ -175,7 +175,7 @@ module MosesPG
     # @return [String]
     #
     def to_s
-      "#<#{self.class.name} columns=#{@columns.inspect} rows=#{@rows.inspect} tag=#{@tag.inspect}>"
+      "#<#{self.class.name} columns=#{@columns.inspect} rows=#{@rows.inspect} tag=#{@tag.inspect} processed_row_count=#{@processed_row_count.inspect}>"
     end
 
   end

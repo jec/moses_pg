@@ -32,6 +32,9 @@ module MosesPG
       event :execute_sent do
         transition [:statement_described, :bound, :executed] => :execute_in_progress
       end
+      event :close_portal_sent do
+        transition [:bound, :executed] => :close_portal_in_progress
+      end
       event :close_sent do
         transition [:statement_described, :bound, :executed] => :close_in_progress
       end
@@ -39,6 +42,7 @@ module MosesPG
         transition :describe_statement_in_progress => :statement_described
         transition :bind_in_progress => :bound
         transition :execute_in_progress => :executed
+        transition :close_portal_in_progress => :statement_described
         transition :close_in_progress => :closed
       end
       event :action_failed do
@@ -64,14 +68,19 @@ module MosesPG
         end
       end
 
-      state :statement_described, :bound, :executed do
-        def bind(*bindvars)
-          # TODO: close the previous portal if there is one, to release the
-          # resources on the backend
-          @portal_name = generate_portal_name
+      state :statement_described do
+        def close_portal
           deferrable = ::EM::DefaultDeferrable.new
-          defer1 = @connection._bind(self, bindvars)
-          bind_sent
+          deferrable.succeed
+          deferrable
+        end
+      end
+
+      state :bound, :executed do
+        def close_portal
+          deferrable = ::EM::DefaultDeferrable.new
+          defer1 = @connection._close_portal(self)
+          close_portal_sent
           defer1.callback do
             action_completed
             deferrable.succeed
@@ -82,43 +91,52 @@ module MosesPG
           end
           deferrable
         end
+      end
 
-        def execute(*bindvars)
+      state :statement_described, :bound, :executed do
+        def bind(*bindvars)
           deferrable = ::EM::DefaultDeferrable.new
-          # if bindvars specified, or statement hasn't been bound yet, run the
-          # bind first
-          if !bindvars.empty? || statement_described?
-            defer1 = bind(*bindvars)
-            defer1.callback do
-              defer2 = @connection._execute(self)
-              execute_sent
-              defer2.callback do |result|
-                action_completed
-                result.columns = @columns
-                deferrable.succeed(result)
-              end
-              defer2.errback do |err|
-                action_failed
-                deferrable.fail(err)
-              end
+          # close the previous portal if there is one, to release the
+          # resources on the backend
+          defer1 = close_portal
+          defer1.callback do
+            @portal_name = generate_portal_name
+            defer2 = @connection._bind(self, bindvars)
+            bind_sent
+            defer2.callback do
+              action_completed
+              deferrable.succeed
             end
-            defer1.errback do |err|
+            defer2.errback do |err|
               action_failed
               deferrable.fail(err)
             end
-          # else just execute
-          else
-            defer1 = @connection._execute(self)
+          end
+          defer1.errback { |err| deferrable.fail(err) }
+          deferrable
+        end
+
+        def execute(*bindvars)
+          deferrable = ::EM::DefaultDeferrable.new
+          # we have to run bind first every time, because executing an existing
+          # port does not start the query over
+          defer1 = bind(*bindvars)
+          defer1.callback do
+            defer2 = @connection._execute(self)
             execute_sent
-            defer1.callback do |result|
+            defer2.callback do |result|
               action_completed
               result.columns = @columns
               deferrable.succeed(result)
             end
-            defer1.errback do |err|
+            defer2.errback do |err|
               action_failed
               deferrable.fail(err)
             end
+          end
+          defer1.errback do |err|
+            action_failed
+            deferrable.fail(err)
           end
           deferrable
         end
@@ -188,19 +206,6 @@ module MosesPG
     end
 
     #
-    # Initiates the bind step for the +Statement+ and returns a +Deferrable+
-    #
-    # Upon successful completion, the +Deferrable+'s +#callback+ is called with
-    # no arguments.
-    #
-    # @param [Array<Object>] bindvars The values being bound
-    # @return [EventMachine::Deferrable]
-    #
-    def bind(*bindvars)
-      super
-    end
-
-    #
     # Initiates the execution step for the +Statement+ and returns a
     # +Deferrable+
     #
@@ -247,12 +252,25 @@ module MosesPG
 
     private
 
+    #
+    # Initiates the bind step for the +Statement+ and returns a +Deferrable+
+    #
+    # Upon successful completion, the +Deferrable+'s +#callback+ is called with
+    # no arguments.
+    #
+    # @param [Array<Object>] bindvars The values being bound
+    # @return [EventMachine::Deferrable]
+    #
+    def bind(*bindvars)
+      super
+    end
+
     def self.generate_statement_name
       "stmt_#{rand(1<<32).to_s(16)}"
     end
 
     def generate_portal_name
-      "port_#{name[4..-1]}_#{rand(1<<16).to_s(16)}"
+      "port_#{name[5..-1]}_#{rand(1<<16).to_s(16)}"
     end
 
   end

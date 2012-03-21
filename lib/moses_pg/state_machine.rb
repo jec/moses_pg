@@ -29,6 +29,7 @@ module MosesPG
           after_transition any => :parse_failed, :do => :fail_parse
           after_transition any => :bind_failed, :do => :fail_bind
           after_transition any => :execute_failed, :do => :fail_execute
+          after_transition any => :close_portal_failed, :do => :fail_close_portal
           after_transition any => :close_statement_failed, :do => :fail_close_statement
 
           # entering the ready state checks the query queue and calls succeed for
@@ -75,6 +76,7 @@ module MosesPG
             transition :parse_in_progress => :parse_failed
             transition :bind_in_progress => :bind_failed
             transition :execute_in_progress => :execute_failed
+            transition :close_portal_in_progress => :close_portal_failed
             transition :close_statement_in_progress => :close_statement_failed
           end
           event :error_reset do
@@ -102,6 +104,9 @@ module MosesPG
           event :execute_sent do
             transition :ready => :execute_in_progress
           end
+          event :close_portal_sent do
+            transition :ready => :close_portal_in_progress
+          end
           event :close_statement_sent do
             transition :ready => :close_statement_in_progress
           end
@@ -119,7 +124,7 @@ module MosesPG
             transition :bind_in_progress => :ready
           end
           event :close_complete do
-            transition :close_statement_in_progress => :ready
+            transition [:close_portal_in_progress, :close_statement_in_progress] => :ready
           end
           event :parameter_description do
             transition :statement_describe_in_progress => same
@@ -193,6 +198,11 @@ module MosesPG
               _send(:_send_execute, [statement])
             end
 
+            def _close_portal(statement)
+              @logger.trace 'in #_close_portal; starting immediate'
+              _send(:_send_close_portal, [statement])
+            end
+
             def _close_statement(statement)
               @logger.trace 'in #_close_statement; starting immediate'
               _send(:_send_close_statement, [statement])
@@ -264,6 +274,13 @@ module MosesPG
               @logger.trace 'in #_execute; queueing request'
               defer = ::EM::DefaultDeferrable.new
               @waiting << [:_send_execute, [statement], defer]
+              defer
+            end
+
+            def _close_portal(statement)
+              @logger.trace 'in #_close_portal; queueing request'
+              defer = ::EM::DefaultDeferrable.new
+              @waiting << [:_send_close_portal, [statement], defer]
               defer
             end
 
