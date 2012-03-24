@@ -149,63 +149,53 @@ module MosesPG
           end
 
           #
-          # In the ready state, the query methods send the requests to PostgreSQL
-          # immediately.
+          # In the ready state, the query methods run the requests immediately,
+          # unless a different transaction is active, in which case they're
+          # queued for after the completion of the transaction.
           #
           state :ready do
-            def execute(sql)
-              @logger.trace 'in #execute; starting immediate'
-              _send(:_send_query, [sql])
+            def execute(sql, tx = nil)
+              run(:_send_query, [sql], tx)
             end
 
-            def commit
-              @logger.trace 'in #commit; starting immediate'
-              _send(:_send_query_message, [@commit_msg])
+            def commit(tx = nil)
+              run(:_send_commit, [], tx)
             end
 
-            def rollback
-              @logger.trace 'in #rollback; starting immediate'
-              _send(:_send_query_message, [@rollback_msg])
+            def rollback(tx = nil)
+              run(:_send_rollback, [], tx)
             end
 
-            def _start_transaction
-              @logger.trace 'in #_start_transaction; starting immediate'
-              _send(:_send_query_message, [@start_xact_msg])
+            def _start_transaction(tx = nil)
+              run(:_send_start_transaction, [tx], tx)
             end
 
-            def _prepare(name, sql, datatypes = nil)
-              @logger.trace 'in #_prepare; starting immediate'
-              _send(:_send_parse, [name, sql, datatypes])
+            def _prepare(name, sql, datatypes = nil, tx = nil)
+              run(:_send_parse, [name, sql, datatypes], tx)
             end
 
-            def _bind(statement, bindvars)
-              @logger.trace 'in #_bind; starting immediate'
-              _send(:_send_bind, [statement, bindvars])
+            def _bind(statement, bindvars, tx = nil)
+              run(:_send_bind, [statement, bindvars], tx)
             end
 
-            def _describe_statement(statement)
-              @logger.trace 'in #_describe_statement; starting immediate'
-              _send(:_send_describe_statement, [statement])
+            def _describe_statement(statement, tx = nil)
+              run(:_send_describe_statement, [statement], tx)
             end
 
-            def _describe_portal(statement)
-              @logger.trace 'in #_describe_portal; starting immediate'
-              _send(:_send_describe_portal, [statement])
+            def _describe_portal(statement, tx = nil)
+              run(:_send_describe_portal, [statement], tx)
             end
 
-            def _execute(statement)
-              @logger.trace 'in #_execute; starting immediate'
-              _send(:_send_execute, [statement])
+            def _execute(statement, tx = nil)
+              run(:_send_execute, [statement], tx)
             end
 
-            def _close_portal(statement)
-              @logger.trace 'in #_close_portal; starting immediate'
-              _send(:_send_close_portal, [statement])
+            def _close_portal(statement, tx = nil)
+              run(:_send_close_portal, [statement], tx)
             end
 
-            def _close_statement(statement)
-              @logger.trace 'in #_close_statement; starting immediate'
-              _send(:_send_close_statement, [statement])
+            def _close_statement(statement, tx = nil)
+              run(:_send_close_statement, [statement], tx)
             end
           end
 
@@ -214,81 +204,48 @@ module MosesPG
           # next time the ready state is entered.
           #
           state all - :ready do
-            def execute(sql)
-              @logger.trace 'in #execute; queueing request'
-              defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_query, [sql], defer]
-              defer
+            def execute(sql, tx = nil)
+              enqueue(:_send_query, [sql], tx)
             end
 
-            def commit
-              @logger.trace 'in #commit; queueing request'
-              defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_query_message, [@commit_msg], defer]
-              defer
+            def commit(tx = nil)
+              enqueue(:_send_commit, [], tx)
             end
 
-            def rollback
-              @logger.trace 'in #rollback; queueing request'
-              defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_query_message, [@rollback_msg], defer]
-              defer
+            def rollback(tx = nil)
+              enqueue(:_send_rollback, [], tx)
             end
 
-            def _start_transaction
-              @logger.trace 'in #_start_transaction; queueing request'
-              defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_query_message, [@start_xact_msg], defer]
-              defer
+            def _start_transaction(tx = nil)
+              enqueue(:_send_start_transaction, [tx], tx)
             end
 
-            def _prepare(name, sql, datatypes = nil)
-              @logger.trace 'in #_prepare; queueing request'
-              defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_parse, [name, sql, datatypes], defer]
-              defer
+            def _prepare(name, sql, datatypes = nil, tx = nil)
+              enqueue(:_send_parse, [name, sql, datatypes], tx)
             end
 
-            def _bind(statement, bindvars)
-              @logger.trace 'in #_bind; queueing request'
-              defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_bind, [statement, bindvars], defer]
-              defer
+            def _bind(statement, bindvars, tx = nil)
+              enqueue(:_send_bind, [statement, bindvars], tx)
             end
 
-            def _describe_statement(statement)
-              @logger.trace 'in #_describe_statement; queueing request'
-              defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_describe_statement, [statement], defer]
-              defer
+            def _describe_statement(statement, tx = nil)
+              enqueue(:_send_describe_statement, [statement], tx)
             end
 
-            def _describe_portal(statement)
-              @logger.trace 'in #_describe_portal; queueing request'
-              defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_describe_portal, [statement], defer]
-              defer
+            def _describe_portal(statement, tx = nil)
+              enqueue(:_send_describe_portal, [statement], tx)
             end
 
-            def _execute(statement)
-              @logger.trace 'in #_execute; queueing request'
-              defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_execute, [statement], defer]
-              defer
+            def _execute(statement, tx = nil)
+              enqueue(:_send_execute, [statement], tx)
             end
 
-            def _close_portal(statement)
-              @logger.trace 'in #_close_portal; queueing request'
-              defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_close_portal, [statement], defer]
-              defer
+            def _close_portal(statement, tx = nil)
+              enqueue(:_send_close_portal, [statement], tx)
             end
 
-            def _close_statement(statement)
-              @logger.trace 'in #_close_statement; queueing request'
-              defer = ::EM::DefaultDeferrable.new
-              @waiting << [:_send_close_statement, [statement], defer]
-              defer
+            def _close_statement(statement, tx = nil)
+              enqueue(:_send_close_statement, [statement], tx)
             end
           end
         end

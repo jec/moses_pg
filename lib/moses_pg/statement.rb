@@ -11,6 +11,7 @@
 #++
 
 require 'state_machine'
+require 'moses_pg/transaction'
 
 module MosesPG
 
@@ -94,14 +95,14 @@ module MosesPG
       end
 
       state :statement_described, :bound, :executed do
-        def bind(*bindvars)
+        def _bind(tx, *bindvars)
           deferrable = ::EM::DefaultDeferrable.new
           # close the previous portal if there is one, to release the
           # resources on the backend
           defer1 = close_portal
           defer1.callback do
             @portal_name = generate_portal_name
-            defer2 = @connection._bind(self, bindvars)
+            defer2 = @connection._bind(self, bindvars, tx)
             bind_sent
             defer2.callback do
               action_completed
@@ -118,11 +119,12 @@ module MosesPG
 
         def execute(*bindvars)
           deferrable = ::EM::DefaultDeferrable.new
+          tx = bindvars.first.kind_of?(Transaction) ? bindvars.shift : nil
           # we have to run bind first every time, because executing an existing
           # port does not start the query over
-          defer1 = bind(*bindvars)
+          defer1 = _bind(tx, *bindvars)
           defer1.callback do
-            defer2 = @connection._execute(self)
+            defer2 = @connection._execute(self, tx)
             execute_sent
             defer2.callback do |result|
               action_completed
@@ -184,10 +186,10 @@ module MosesPG
     # @param [Array<Integer>] datatypes 0 for text and 1 for binary
     # @return [EventMachine::Deferrable]
     #
-    def self.prepare(connection, sql, datatypes = nil)
+    def self.prepare(connection, sql, datatypes = nil, tx = nil)
       deferrable = ::EM::DefaultDeferrable.new
       name = generate_statement_name
-      defer1 = connection._prepare(name, sql, datatypes)
+      defer1 = connection._prepare(name, sql, datatypes, tx)
       defer1.callback do
         stmt = new(connection, sql, name)
         defer2 = stmt.describe
@@ -210,7 +212,7 @@ module MosesPG
     # +Deferrable+
     #
     # If the +Statement+ was not previously bound, or if +bindvars+ are given,
-    # then the method calls +#bind+ and waits for completion before stating the
+    # then the method calls +#_bind+ and waits for completion before stating the
     # execution.
     #
     # Upon successful completion, the +Result+ object is passed through the
@@ -261,7 +263,7 @@ module MosesPG
     # @param [Array<Object>] bindvars The values being bound
     # @return [EventMachine::Deferrable]
     #
-    def bind(*bindvars)
+    def _bind(*bindvars)
       super
     end
 

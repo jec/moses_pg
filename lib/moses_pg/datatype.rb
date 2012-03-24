@@ -379,6 +379,9 @@ module MosesPG
 
     class Void < Base
       register(2278)
+      def self.translate(obj)
+        nil
+      end
     end
 
     class XML < Base

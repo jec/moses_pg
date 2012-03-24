@@ -13,10 +13,12 @@
 require 'etc'
 require 'eventmachine'
 require 'moses_pg/state_machine'
+require 'moses_pg/transaction_state_machine'
 require 'moses_pg/message'
 require 'moses_pg/message/buffer'
 require 'moses_pg/result'
 require 'moses_pg/statement'
+require 'moses_pg/transaction'
 
 #
 # MosesPG provides EventMachine-based access to PostgreSQL using version 3.0 of
@@ -66,6 +68,7 @@ module MosesPG
   class Connection < ::EM::Connection
 
     include StateMachine
+    include TransactionStateMachine
 
     Default_Host = 'localhost'
     Default_Port = 5432
@@ -173,7 +176,7 @@ module MosesPG
       @buffer.receive(data) do |message_type_char, raw_message|
         @message = MosesPG::Message.create(message_type_char, raw_message)
         @logger.trace { ">>> #{@message}" }
-        send(@message.event, @message)
+        @message.events.each { |event| send(event) }
       end
       self
     end
@@ -189,35 +192,39 @@ module MosesPG
     end
 
     def transaction
-      defer0 = _start_transaction
       if block_given?
         deferrable = ::EM::DefaultDeferrable.new
+        tx = Transaction.new(self)
+        defer0 = _start_transaction(tx)
         defer0.callback do
           defer1 = nil
           begin
-            defer1 = yield
+            do_rollback = proc do |e|
+              d = rollback(tx)
+              d.callback { deferrable.fail(e) }
+              d.errback { deferrable.fail(e) }
+            end
+            case defer1 = yield(tx)
+            when ::EM::Deferrable
+              defer1.callback do |*args|
+                defer2 = commit(tx)
+                defer2.callback { deferrable.succeed(*args) }
+                defer2.errback { |err| deferrable.fail(err) }
+              end
+              defer1.errback { |err| do_rollback.call(err) }
+            else
+              e = RuntimeError.new("Block must return a Deferrable, but it returned #{defer1.class.name}")
+              e.set_backtrace(caller)
+              do_rollback.call(e)
+            end
           rescue Exception => e
-            defer2 = rollback
-            defer2.callback { deferrable.fail(e) }
-            defer2.errback { deferrable.fail(e) }
-          end
-          if defer1
-            defer1.callback do |*args|
-              defer2 = commit
-              defer2.callback { deferrable.succeed(*args) }
-              defer2.errback { |err| deferrable.fail(err) }
-            end
-            defer1.errback do |err|
-              defer2 = rollback
-              defer2.callback { deferrable.fail(err) }
-              defer2.errback { deferrable.fail(err) }
-            end
+            do_rollback.call(e)
           end
         end
         defer0.errback { |err| deferrable.fail(err) }
         deferrable
       else
-        defer0
+        raise "No block given for #transaction"
       end
     end
 
@@ -234,7 +241,7 @@ module MosesPG
     #   by semicolons
     # @return [EventMachine::Deferrable]
     #
-    def execute(sql)
+    def execute(sql, tx = nil)
       super
     end
 
@@ -246,8 +253,8 @@ module MosesPG
     #   included in the SQL command, if any
     # @return [EventMachine::Deferrable]
     #
-    def prepare(sql, datatypes = nil)
-      Statement.prepare(self, sql, datatypes)
+    def prepare(sql, datatypes = nil, tx = nil)
+      Statement.prepare(self, sql, datatypes, tx)
     end
 
     #
@@ -262,7 +269,7 @@ module MosesPG
     #   included in the SQL command, if any
     # @return [EventMachine::Deferrable]
     #
-    def _prepare(name, sql, datatypes = nil)
+    def _prepare(name, sql, datatypes = nil, tx = nil)
       super
     end
 
@@ -274,7 +281,7 @@ module MosesPG
     # @param [Array<Object>] bindvars The values being bound
     # @return [EventMachine::Deferrable]
     #
-    def _bind(statement, bindvars)
+    def _bind(statement, bindvars, tx = nil)
       @statement = statement
       super
     end
@@ -310,7 +317,7 @@ module MosesPG
     # @param [MosesPG::Statement] statement The +Statement+ object being executed
     # @return [EventMachine::Deferrable]
     #
-    def _execute(statement)
+    def _execute(statement, tx = nil)
       @statement = statement
       super
     end
@@ -423,10 +430,18 @@ module MosesPG
       # call succeed on the previous deferrable
       if last_succeeded
         @logger.trace('calling #succeed for previous Deferrable')
-        #EM.next_tick {
-        last_succeeded.call #}
+        EM.next_tick { last_succeeded.call }
       end
       @logger.trace('leaving #finish_previous_query')
+    end
+
+    def init_transaction
+    end
+
+    def close_transaction
+      @waiting = @next_waiting
+      @next_waiting = nil
+      @transaction = nil
     end
 
     def _send(action, args, defer = nil)
@@ -443,9 +458,27 @@ module MosesPG
       query_sent
     end
 
-    def _send_query_message(message)
-      send_message(message)
+    def _send_start_transaction(tx)
+      send_message(@start_xact_msg)
       @result = MosesPG::ResultGroup.new(self)
+      @transaction = tx
+      @next_waiting = @waiting
+      @waiting = []
+      start_tx
+      query_sent
+    end
+
+    def _send_commit
+      send_message(@commit_msg)
+      @result = MosesPG::ResultGroup.new(self)
+      commit_tx
+      query_sent
+    end
+
+    def _send_rollback
+      send_message(@rollback_msg)
+      @result = MosesPG::ResultGroup.new(self)
+      rollback_tx
       query_sent
     end
 

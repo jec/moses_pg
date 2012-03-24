@@ -88,12 +88,17 @@ module MosesPG
         allocate.parse(stream)
       end
 
-      def self.event
+      def self.base_event_name
         name[/::([^:]+)$/, 1].decamelize.to_sym
       end
 
-      def event
-        self.class.event
+      def events
+        base = self.class.base_event_name
+        event_namespaces.collect { |s| "#{base}#{s ? '_' : ''}#{s}".to_sym }
+      end
+
+      def event_namespaces
+        [nil]
       end
 
       def parse(stream)
@@ -310,10 +315,12 @@ module MosesPG
       Code = 'C'
       register
       attr_reader :tag
-
       def parse(stream)
         @tag = stream.strip
         self
+      end
+      def event_namespaces
+        [nil, 'tx']
       end
     end
 
