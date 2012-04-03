@@ -55,8 +55,8 @@ module MosesPG
     # @raise [MosesPG::Error]
     # @return [Array<MosesPG::Result>]
     #
-    def execute!(sql)
-      result = EM::Synchrony.sync(execute(sql))
+    def execute!(sql, tx = nil)
+      result = EM::Synchrony.sync(execute(sql, tx))
       raise result if result.kind_of?(Error)
       result
     end
@@ -77,38 +77,59 @@ module MosesPG
     end
 
     def transaction!
-      start_transaction!
+      tx = Transaction.new(self)
+      _start_transaction!(tx)
       if block_given?
         begin
-          result = yield
+          result = yield(tx)
         rescue Exception => e
-          rollback!
+          rollback!(tx)
           raise
         else
-          commit!
+          commit!(tx)
           result
         end
       else
-        self
+        raise "No block given for #transaction"
       end
     end
 
-    def start_transaction!
-      result = EM::Synchrony.sync(_start_transaction)
+    def _start_transaction!(tx = nil)
+      result = EM::Synchrony.sync(_start_transaction(tx))
       raise result if result.kind_of?(Error)
       self
+    end
+
+    def commit!(tx = nil)
+      result = EM::Synchrony.sync(commit(tx))
+      raise result if result.kind_of?(Error)
+      self
+    end
+
+    def rollback!(tx = nil)
+      result = EM::Synchrony.sync(rollback(tx))
+      raise result if result.kind_of?(Error)
+      self
+    end
+
+  end
+
+  class Transaction
+
+    def execute!(sql)
+      @connection.execute!(sql, self)
+    end
+
+    def prepare!(sql, datatypes = nil)
+      Statement.prepare(self, sql, datatypes, self)
     end
 
     def commit!
-      result = EM::Synchrony.sync(commit)
-      raise result if result.kind_of?(Error)
-      self
+      @connection.commit!(self)
     end
 
     def rollback!
-      result = EM::Synchrony.sync(rollback)
-      raise result if result.kind_of?(Error)
-      self
+      @connection.rollback!(self)
     end
 
   end

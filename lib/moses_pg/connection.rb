@@ -239,6 +239,7 @@ module MosesPG
     #
     # @param [String] sql A single SQL command or multiple commands, separated
     #   by semicolons
+    # @param [MosesPG::Transaction] tx The +Transaction+, if any
     # @return [EventMachine::Deferrable]
     #
     def execute(sql, tx = nil)
@@ -251,6 +252,7 @@ module MosesPG
     # @param [String] sql A single SQL command to be parsed and saved
     # @param [nil, Array<Integer>] datatypes The data type(s) to use for the parameters
     #   included in the SQL command, if any
+    # @param [MosesPG::Transaction] tx The +Transaction+, if any
     # @return [EventMachine::Deferrable]
     #
     def prepare(sql, datatypes = nil, tx = nil)
@@ -267,6 +269,7 @@ module MosesPG
     # @param [String] sql A single SQL command to be parsed and saved
     # @param [nil, Array<Integer>] datatypes The data type(s) to use for the parameters
     #   included in the SQL command, if any
+    # @param [MosesPG::Transaction] tx The +Transaction+, if any
     # @return [EventMachine::Deferrable]
     #
     def _prepare(name, sql, datatypes = nil, tx = nil)
@@ -279,6 +282,7 @@ module MosesPG
     # @api private
     # @param [MosesPG::Statement] statement The +Statement+ object being bound to
     # @param [Array<Object>] bindvars The values being bound
+    # @param [MosesPG::Transaction] tx The +Transaction+, if any
     # @return [EventMachine::Deferrable]
     #
     def _bind(statement, bindvars, tx = nil)
@@ -291,9 +295,10 @@ module MosesPG
     #
     # @api private
     # @param [MosesPG::Statement] statement The +Statement+ object
+    # @param [MosesPG::Transaction] tx The +Transaction+, if any
     # @return [EventMachine::Deferrable]
     #
-    def _describe_statement(statement)
+    def _describe_statement(statement, tx = nil)
       @statement = statement
       super
     end
@@ -303,9 +308,10 @@ module MosesPG
     #
     # @api private
     # @param [MosesPG::Statement] statement The +Statement+ object
+    # @param [MosesPG::Transaction] tx The +Transaction+, if any
     # @return [EventMachine::Deferrable]
     #
-    def _describe_portal(statement)
+    def _describe_portal(statement, tx = nil)
       @statement = statement
       super
     end
@@ -315,6 +321,7 @@ module MosesPG
     #
     # @api private
     # @param [MosesPG::Statement] statement The +Statement+ object being executed
+    # @param [MosesPG::Transaction] tx The +Transaction+, if any
     # @return [EventMachine::Deferrable]
     #
     def _execute(statement, tx = nil)
@@ -330,9 +337,10 @@ module MosesPG
     #
     # @api private
     # @param [MosesPG::Statement] statement The +Statement+ object
+    # @param [MosesPG::Transaction] tx The +Transaction+, if any
     # @return [EventMachine::Deferrable]
     #
-    def _close_portal(statement)
+    def _close_portal(statement, tx = nil)
       @statement = statement
       super
     end
@@ -344,9 +352,10 @@ module MosesPG
     #
     # @api private
     # @param [MosesPG::Statement] statement The +Statement+ object being closed
+    # @param [MosesPG::Transaction] tx The +Transaction+, if any
     # @return [EventMachine::Deferrable]
     #
-    def _close_statement(statement)
+    def _close_statement(statement, tx = nil)
       @statement = statement
       super
     end

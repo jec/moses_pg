@@ -51,9 +51,9 @@ module MosesPG
       end
 
       state :prepared do
-        def describe
+        def describe(tx = nil)
           deferrable = ::EM::DefaultDeferrable.new
-          defer1 = @connection._describe_statement(self)
+          defer1 = @connection._describe_statement(self, tx)
           describe_statement_sent
           defer1.callback do |result|
             action_completed
@@ -78,9 +78,9 @@ module MosesPG
       end
 
       state :bound, :executed do
-        def close_portal
+        def close_portal(tx = nil)
           deferrable = ::EM::DefaultDeferrable.new
-          defer1 = @connection._close_portal(self)
+          defer1 = @connection._close_portal(self, tx)
           close_portal_sent
           defer1.callback do
             action_completed
@@ -143,8 +143,8 @@ module MosesPG
           deferrable
         end
 
-        def close
-          deferrable = @connection._close_statement(self)
+        def close(tx = nil)
+          deferrable = @connection._close_statement(self, tx)
           close_sent
           deferrable.callback { action_completed }
           deferrable.errback { action_failed }
@@ -192,7 +192,7 @@ module MosesPG
       defer1 = connection._prepare(name, sql, datatypes, tx)
       defer1.callback do
         stmt = new(connection, sql, name)
-        defer2 = stmt.describe
+        defer2 = stmt.describe(tx)
         defer2.callback { deferrable.succeed(stmt) }
         defer2.errback { |err| deferrable.fail(err) }
       end
@@ -260,10 +260,11 @@ module MosesPG
     # Upon successful completion, the +Deferrable+'s +#callback+ is called with
     # no arguments.
     #
+    # @param [nil, MosesPG::Transaction] tx The active +Transaction+ if any
     # @param [Array<Object>] bindvars The values being bound
     # @return [EventMachine::Deferrable]
     #
-    def _bind(*bindvars)
+    def _bind(tx, *bindvars)
       super
     end
 

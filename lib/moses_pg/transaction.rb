@@ -15,7 +15,7 @@ module MosesPG
     end
 
     def prepare(sql, datatypes = nil)
-      Statement.prepare(self, sql, datatypes, self)
+      Statement.prepare(@connection, sql, datatypes, self)
     end
 
     def commit

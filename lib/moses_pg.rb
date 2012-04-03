@@ -12,5 +12,6 @@
 
 require 'moses_pg/connection'
 require 'moses_pg/statement'
+require 'moses_pg/transaction'
 
 MPG = MosesPG
