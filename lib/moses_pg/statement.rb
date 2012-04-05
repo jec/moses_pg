@@ -70,7 +70,7 @@ module MosesPG
       end
 
       state :statement_described do
-        def close_portal
+        def close_portal(tx = nil)
           deferrable = ::EM::DefaultDeferrable.new
           deferrable.succeed
           deferrable
@@ -99,7 +99,7 @@ module MosesPG
           deferrable = ::EM::DefaultDeferrable.new
           # close the previous portal if there is one, to release the
           # resources on the backend
-          defer1 = close_portal
+          defer1 = close_portal(tx)
           defer1.callback do
             @portal_name = generate_portal_name
             defer2 = @connection._bind(self, bindvars, tx)
