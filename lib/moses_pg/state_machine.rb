@@ -154,48 +154,8 @@ module MosesPG
           # queued for after the completion of the transaction.
           #
           state :ready do
-            def execute(sql, tx = nil)
-              run(:_send_query, [sql], tx)
-            end
-
-            def commit(tx = nil)
-              run(:_send_commit, [], tx)
-            end
-
-            def rollback(tx = nil)
-              run(:_send_rollback, [], tx)
-            end
-
-            def _start_transaction(tx = nil)
-              run(:_send_start_transaction, [tx], tx)
-            end
-
-            def _prepare(name, sql, datatypes = nil, tx = nil)
-              run(:_send_parse, [name, sql, datatypes], tx)
-            end
-
-            def _bind(statement, bindvars, tx = nil)
-              run(:_send_bind, [statement, bindvars], tx)
-            end
-
-            def _describe_statement(statement, tx = nil)
-              run(:_send_describe_statement, [statement], tx)
-            end
-
-            def _describe_portal(statement, tx = nil)
-              run(:_send_describe_portal, [statement], tx)
-            end
-
-            def _execute(statement, tx = nil)
-              run(:_send_execute, [statement], tx)
-            end
-
-            def _close_portal(statement, tx = nil)
-              run(:_send_close_portal, [statement], tx)
-            end
-
-            def _close_statement(statement, tx = nil)
-              run(:_send_close_statement, [statement], tx)
+            def run(name, args, tx)
+              _run(name, args, tx)
             end
           end
 
@@ -204,48 +164,8 @@ module MosesPG
           # next time the ready state is entered.
           #
           state all - :ready do
-            def execute(sql, tx = nil)
-              enqueue(:_send_query, [sql], tx)
-            end
-
-            def commit(tx = nil)
-              enqueue(:_send_commit, [], tx)
-            end
-
-            def rollback(tx = nil)
-              enqueue(:_send_rollback, [], tx)
-            end
-
-            def _start_transaction(tx = nil)
-              enqueue(:_send_start_transaction, [tx], tx)
-            end
-
-            def _prepare(name, sql, datatypes = nil, tx = nil)
-              enqueue(:_send_parse, [name, sql, datatypes], tx)
-            end
-
-            def _bind(statement, bindvars, tx = nil)
-              enqueue(:_send_bind, [statement, bindvars], tx)
-            end
-
-            def _describe_statement(statement, tx = nil)
-              enqueue(:_send_describe_statement, [statement], tx)
-            end
-
-            def _describe_portal(statement, tx = nil)
-              enqueue(:_send_describe_portal, [statement], tx)
-            end
-
-            def _execute(statement, tx = nil)
-              enqueue(:_send_execute, [statement], tx)
-            end
-
-            def _close_portal(statement, tx = nil)
-              enqueue(:_send_close_portal, [statement], tx)
-            end
-
-            def _close_statement(statement, tx = nil)
-              enqueue(:_send_close_statement, [statement], tx)
+            def run(name, args, tx)
+              _enqueue(name, args, tx)
             end
           end
         end

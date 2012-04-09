@@ -41,13 +41,13 @@ module MosesPG
           end
 
           state :none do
-            def run(name, args, tx)
-              @logger.trace { "in #run: running #{name.inspect} immediate" }
+            def _run(name, args, tx)
+              @logger.trace { "in #_run: running #{name.inspect} immediate" }
               _send(name, args)
             end
 
-            def enqueue(name, args, tx)
-              @logger.trace { "in #enqueue: pushing #{name.inspect} into this queue" }
+            def _enqueue(name, args, tx)
+              @logger.trace { "in #_enqueue: pushing #{name.inspect} into this queue" }
               deferrable = ::EM::DefaultDeferrable.new
               @waiting << [name, args, deferrable]
               deferrable
@@ -55,25 +55,25 @@ module MosesPG
           end
 
           state any - :none do
-            def run(name, args, tx)
+            def _run(name, args, tx)
               if tx == @transaction
-                @logger.trace { "in #run: running #{name.inspect} immediate" }
+                @logger.trace { "in #_run: running #{name.inspect} immediate" }
                 _send(name, args)
               else
-                @logger.trace { "in #run: pushing #{name.inspect} into next queue" }
+                @logger.trace { "in #_run: pushing #{name.inspect} into next queue" }
                 deferrable = ::EM::DefaultDeferrable.new
                 @next_waiting << [name, args, deferrable]
                 deferrable
               end
             end
 
-            def enqueue(name, args, tx)
+            def _enqueue(name, args, tx)
               deferrable = ::EM::DefaultDeferrable.new
               queue = if tx == @transaction
-                @logger.trace { "in #enqueue: pushing #{name.inspect} into this queue" }
+                @logger.trace { "in #_enqueue: pushing #{name.inspect} into this queue" }
                 @waiting
               else
-                @logger.trace { "in #enqueue: pushing #{name.inspect} into next queue" }
+                @logger.trace { "in #_enqueue: pushing #{name.inspect} into next queue" }
                 @next_waiting
               end
               queue << [name, args, deferrable]

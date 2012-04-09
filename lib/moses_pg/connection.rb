@@ -228,6 +228,17 @@ module MosesPG
       end
     end
 
+    def commit(tx = nil)
+      run(:_send_commit, [], tx)
+    end
+
+    def rollback(tx = nil)
+      run(:_send_rollback, [], tx)
+    end
+
+    def _start_transaction(tx = nil)
+      run(:_send_start_transaction, [tx], tx)
+    end
     #
     # Submits SQL command (or commands) to the PostgreSQL server and returns a
     # +Deferrable+
@@ -243,7 +254,7 @@ module MosesPG
     # @return [EventMachine::Deferrable]
     #
     def execute(sql, tx = nil)
-      super
+      run(:_send_query, [sql], tx)
     end
 
     #
@@ -273,7 +284,7 @@ module MosesPG
     # @return [EventMachine::Deferrable]
     #
     def _prepare(name, sql, datatypes = nil, tx = nil)
-      super
+      run(:_send_parse, [name, sql, datatypes], tx)
     end
 
     #
@@ -287,7 +298,7 @@ module MosesPG
     #
     def _bind(statement, bindvars, tx = nil)
       @statement = statement
-      super
+      run(:_send_bind, [statement, bindvars], tx)
     end
 
     #
@@ -300,7 +311,7 @@ module MosesPG
     #
     def _describe_statement(statement, tx = nil)
       @statement = statement
-      super
+      run(:_send_describe_statement, [statement], tx)
     end
 
     #
@@ -313,7 +324,7 @@ module MosesPG
     #
     def _describe_portal(statement, tx = nil)
       @statement = statement
-      super
+      run(:_send_describe_portal, [statement], tx)
     end
 
     #
@@ -326,7 +337,7 @@ module MosesPG
     #
     def _execute(statement, tx = nil)
       @statement = statement
-      super
+      run(:_send_execute, [statement], tx)
     end
 
     #
@@ -342,7 +353,7 @@ module MosesPG
     #
     def _close_portal(statement, tx = nil)
       @statement = statement
-      super
+      run(:_send_close_portal, [statement], tx)
     end
 
     #
@@ -357,7 +368,7 @@ module MosesPG
     #
     def _close_statement(statement, tx = nil)
       @statement = statement
-      super
+      run(:_send_close_statement, [statement], tx)
     end
 
     private
