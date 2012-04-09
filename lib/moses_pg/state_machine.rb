@@ -32,9 +32,9 @@ module MosesPG
           after_transition any => :close_portal_failed, :do => :fail_close_portal
           after_transition any => :close_statement_failed, :do => :fail_close_statement
 
-          # entering the ready state checks the query queue and calls succeed for
-          # the previous command
-          after_transition any => :ready, :do => :finish_previous_query
+          # entering the ready or bind-completed states checks the query queue
+          # and calls succeed for the previous command
+          after_transition any => [:ready, :bind_completed], :do => :finish_previous_query
 
           event :authentication_ok do
             transition [:startup, :authorizing] => :receive_server_data
@@ -102,7 +102,7 @@ module MosesPG
             transition :ready => :portal_describe_in_progress
           end
           event :execute_sent do
-            transition :ready => :execute_in_progress
+            transition :bind_completed => :execute_in_progress
           end
           event :close_portal_sent do
             transition :ready => :close_portal_in_progress
@@ -121,7 +121,7 @@ module MosesPG
             transition :parse_in_progress => :ready
           end
           event :bind_complete do
-            transition :bind_in_progress => :ready
+            transition :bind_in_progress => :bind_completed
           end
           event :close_complete do
             transition [:close_portal_in_progress, :close_statement_in_progress] => :ready
@@ -157,15 +157,36 @@ module MosesPG
             def run(name, args, tx)
               _run(name, args, tx)
             end
+
+            def _execute(statement, tx = nil)
+              _run(:_send_execute, [statement], tx)
+            end
+          end
+
+          #
+          # In the bind-completed state, only an +#_execute+ can be run
+          # immediately.  Everything else must be queued. This also assumes
+          # that the state machine will only allow one statement at a time to
+          # get us to the bind-completed state, so any +#_execute+ in this
+          # state must necessarily belong to the bound statement.
+          #
+          state :bind_completed do
+            def _execute(statement, tx = nil)
+              _run(:_send_execute, [statement], tx)
+            end
           end
 
           #
           # In all other states, the query methods queue the requests until the
           # next time the ready state is entered.
           #
-          state all - :ready do
+          state all - [:ready, :bind_completed] do
             def run(name, args, tx)
               _enqueue(name, args, tx)
+            end
+
+            def _execute(statement, tx = nil)
+              _enqueue(:_send_execute, [statement], tx)
             end
           end
         end

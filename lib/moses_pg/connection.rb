@@ -337,7 +337,7 @@ module MosesPG
     #
     def _execute(statement, tx = nil)
       @statement = statement
-      run(:_send_execute, [statement], tx)
+      super
     end
 
     #

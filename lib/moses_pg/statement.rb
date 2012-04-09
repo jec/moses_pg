@@ -120,8 +120,10 @@ module MosesPG
         def execute(*bindvars)
           deferrable = ::EM::DefaultDeferrable.new
           tx = bindvars.first.kind_of?(Transaction) ? bindvars.shift : nil
-          # we have to run bind first every time, because executing an existing
-          # port does not start the query over
+          # We have to run bind first every time, because executing an existing
+          # port does not start a select statement over again. Also, the state
+          # machine in Connection expects the sequence for every prepared
+          # statement to be bind and then execute.
           defer1 = _bind(tx, *bindvars)
           defer1.callback do
             defer2 = @connection._execute(self, tx)
