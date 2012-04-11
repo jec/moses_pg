@@ -459,9 +459,27 @@ module MosesPG
     end
 
     def close_transaction
+      pop_queue
+      @transaction = nil
+    end
+
+    def push_queue
+      @logger.trace('... pushing queue')
+      @next_waiting = @waiting
+      @waiting = []
+    end
+
+    def pop_queue
+      @logger.trace('... popping queue')
       @waiting = @next_waiting
       @next_waiting = nil
-      @transaction = nil
+    end
+
+    def _enqueue_next(name, args, tx)
+      deferrable = ::EM::DefaultDeferrable.new
+      @logger.trace { "in #_enqueue_next: pushing #{name.inspect} into next queue" }
+      @next_waiting << [name, args, deferrable]
+      deferrable
     end
 
     def _send(action, args, defer = nil)
@@ -482,8 +500,7 @@ module MosesPG
       send_message(@start_xact_msg)
       @result = MosesPG::ResultGroup.new(self)
       @transaction = tx
-      @next_waiting = @waiting
-      @waiting = []
+      push_queue
       start_tx
       query_sent
     end
