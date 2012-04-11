@@ -36,6 +36,10 @@ module MosesPG
           # and calls succeed for the previous command
           after_transition any => [:ready, :bind_completed], :do => :finish_previous_query
 
+          #after_transition any => :bind_in_progress, :do => :push_queue
+          #after_transition :bind_in_progress => any - :bind_completed, :do => :pop_queue
+          #after_transition :bind_completed => any, :do => :pop_queue
+
           event :authentication_ok do
             transition [:startup, :authorizing] => :receive_server_data
           end
@@ -170,7 +174,11 @@ module MosesPG
           # get us to the bind-completed state, so any +#_execute+ in this
           # state must necessarily belong to the bound statement.
           #
-          state :bind_completed do
+          state :bind_in_progress, :bind_completed do
+            def run(name, args, tx)
+              _enqueue_next(name, args, tx)
+            end
+
             def _execute(statement, tx = nil)
               _run(:_send_execute, [statement], tx)
             end
@@ -180,7 +188,7 @@ module MosesPG
           # In all other states, the query methods queue the requests until the
           # next time the ready state is entered.
           #
-          state all - [:ready, :bind_completed] do
+          state all - [:ready, :bind_in_progress, :bind_completed] do
             def run(name, args, tx)
               _enqueue(name, args, tx)
             end
