@@ -47,9 +47,9 @@ module MosesPG
             end
 
             def _enqueue(name, args, tx)
-              @logger.trace { "in #_enqueue: pushing #{name.inspect} into this queue" }
+              @logger.trace { "in #_enqueue: putting #{name.inspect} into this queue" }
               deferrable = ::EM::DefaultDeferrable.new
-              @waiting << [name, args, deferrable]
+              @this_tx_q << [name, args, deferrable]
               deferrable
             end
           end
@@ -60,9 +60,9 @@ module MosesPG
                 @logger.trace { "in #_run: running #{name.inspect} immediate" }
                 _send(name, args)
               else
-                @logger.trace { "in #_run: pushing #{name.inspect} into next queue" }
+                @logger.trace { "in #_run: putting #{name.inspect} into next queue" }
                 deferrable = ::EM::DefaultDeferrable.new
-                @next_waiting << [name, args, deferrable]
+                @next_tx_q << [name, args, deferrable]
                 deferrable
               end
             end
@@ -70,11 +70,11 @@ module MosesPG
             def _enqueue(name, args, tx)
               deferrable = ::EM::DefaultDeferrable.new
               queue = if tx == @transaction
-                @logger.trace { "in #_enqueue: pushing #{name.inspect} into this queue" }
-                @waiting
+                @logger.trace { "in #_enqueue: putting #{name.inspect} into this queue" }
+                @this_tx_q
               else
-                @logger.trace { "in #_enqueue: pushing #{name.inspect} into next queue" }
-                @next_waiting
+                @logger.trace { "in #_enqueue: putting #{name.inspect} into next queue" }
+                @next_tx_q
               end
               queue << [name, args, deferrable]
               deferrable

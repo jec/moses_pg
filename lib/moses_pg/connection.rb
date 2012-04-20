@@ -125,7 +125,7 @@ module MosesPG
       @logger = opts[:logger] || NullLogger.new
       @batch_size = 0
       @server_params = {}
-      @waiting = []
+      @this_tx_q = []
       @in_progress = defer
 
       @start_xact_msg = Message::Query.new('START TRANSACTION')
@@ -442,10 +442,7 @@ module MosesPG
       # will change the state from ready, which is why we have to call #succeed
       # on the previous query afterward.
       @in_progress = @result = nil
-      unless @waiting.empty?
-        action, args, defer = @waiting.shift
-        _send(action, args, defer)
-      end
+      process_queue
 
       # call succeed on the previous deferrable
       if last_succeeded
@@ -465,28 +462,22 @@ module MosesPG
 
     def push_queue
       @logger.trace('... pushing queue')
-      @next_waiting = @waiting
-      @waiting = []
+      @next_tx_q = @this_tx_q
+      @this_tx_q = []
     end
 
     def pop_queue
       @logger.trace('... popping queue')
-      @waiting = @next_waiting
-      @next_waiting = nil
-    end
-
-    def _enqueue_next(name, args, tx)
-      deferrable = ::EM::DefaultDeferrable.new
-      @logger.trace { "in #_enqueue_next: pushing #{name.inspect} into next queue" }
-      @next_waiting << [name, args, deferrable]
-      deferrable
+      raise "Popping non-empty queue" unless @this_tx_q.empty?
+      @this_tx_q = @next_tx_q
+      @next_tx_q = nil
     end
 
     def _send(action, args, defer = nil)
-      @logger.trace { "entering #_send(#{action.inspect}, ...)" }
+      #@logger.trace { "entering #_send(#{action.inspect}, ...)" }
       @in_progress = defer || ::EM::DefaultDeferrable.new
       send(action, *args)
-      @logger.trace { "leaving #_send(#{action.inspect}, ...)" }
+      #@logger.trace { "leaving #_send(#{action.inspect}, ...)" }
       @in_progress
     end
 

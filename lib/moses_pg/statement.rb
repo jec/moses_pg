@@ -155,6 +155,8 @@ module MosesPG
       end
     end
 
+    @@stmt_seq = 0
+
     private_class_method :new
 
     # Returns the name of the prepared statement as stored in PostgreSQL's session
@@ -207,6 +209,7 @@ module MosesPG
       @connection = connection
       @sql = sql
       @name = name
+      @port_seq = 0
     end
 
     #
@@ -271,11 +274,13 @@ module MosesPG
     end
 
     def self.generate_statement_name
-      "stmt_#{rand(1<<32).to_s(16)}"
+      @@stmt_seq += 1
+      "stmt_#{@@stmt_seq.to_s(16)}"
     end
 
     def generate_portal_name
-      "port_#{name[5..-1]}_#{rand(1<<16).to_s(16)}"
+      @port_seq += 1
+      "port_#{name[5..-1]}_#{@port_seq.to_s(16)}"
     end
 
   end

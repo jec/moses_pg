@@ -36,10 +36,6 @@ module MosesPG
           # and calls succeed for the previous command
           after_transition any => [:ready, :bind_completed], :do => :finish_previous_query
 
-          #after_transition any => :bind_in_progress, :do => :push_queue
-          #after_transition :bind_in_progress => any - :bind_completed, :do => :pop_queue
-          #after_transition :bind_completed => any, :do => :pop_queue
-
           event :authentication_ok do
             transition [:startup, :authorizing] => :receive_server_data
           end
@@ -162,25 +158,32 @@ module MosesPG
               _run(name, args, tx)
             end
 
-            def _execute(statement, tx = nil)
-              _run(:_send_execute, [statement], tx)
+            def process_queue
+              unless @this_tx_q.empty?
+                action, args, defer = @this_tx_q.shift
+                _send(action, args, defer)
+              end
             end
           end
 
           #
-          # In the bind-completed state, only an +#_execute+ can be run
-          # immediately.  Everything else must be queued. This also assumes
-          # that the state machine will only allow one statement at a time to
-          # get us to the bind-completed state, so any +#_execute+ in this
-          # state must necessarily belong to the bound statement.
+          # In a bind state, only an +#_execute+ can be run immediately.
+          # Everything else must be queued. This also assumes that the state
+          # machine will only allow one statement at a time to get us to one of
+          # the bind states, so any +#_execute+ in this state must necessarily
+          # belong to the bound statement.
           #
           state :bind_in_progress, :bind_completed do
             def run(name, args, tx)
-              _enqueue_next(name, args, tx)
+              _enqueue(name, args, tx)
             end
 
             def _execute(statement, tx = nil)
               _run(:_send_execute, [statement], tx)
+            end
+
+            def process_queue
+              # do nothing
             end
           end
 
@@ -193,8 +196,11 @@ module MosesPG
               _enqueue(name, args, tx)
             end
 
-            def _execute(statement, tx = nil)
-              _enqueue(:_send_execute, [statement], tx)
+            def process_queue
+              unless @this_tx_q.empty?
+                action, args, defer = @this_tx_q.shift
+                _send(action, args, defer)
+              end
             end
           end
         end
