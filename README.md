@@ -5,11 +5,13 @@ their frontend/backend protocol. It is still under active development and
 incomplete. In particular, type translation is implemented for most of the
 column data types described in the PostgreSQL manual, but many of the more
 exotic types do not yet have meaningful translations. Simple queries and
-multi-step queries (parse, bind/describe/execute) are working.
+multi-step queries (parse, bind/describe/execute) are working on a basic level,
+but mixing and matching many different query types all at once may not be
+stable.
 
 MosesPG is currently being developed as pure Ruby, but this is not strictly a
-goal of the project. Eventually, if it is required for performance, parts will
-be coded as C extensions.
+goal of the project. Eventually, if it is required for performance, I would
+consider coding parts as C extensions.
 
 ## Dependencies
 
@@ -26,16 +28,16 @@ be coded as C extensions.
 ### Implemented features
 
 * Single-threaded, event-driven access to PostgreSQL, with notification of
-completed queries via EventMachine&rsquo;s Deferrables
+  completed queries via EventMachine&rsquo;s Deferrables
 
-* Optional synchronous query methods (e.g. `#execute!` instead of `#execute`) that
-  block until completion
+* Optional synchronous query methods (e.g. `#execute!` instead of `#execute`)
+  that block until completion
 
-* Built-in per-connection serialization of queries (no need to wait for one
-query to complete before submitting another)
+* Built-in per-connection serialization of queries and transactions (no need to
+  wait for one query or transaction to complete before submitting another)
 
 * Translation to native Ruby types (though not all types yet have meaningful
-translations)
+  translations)
 
 ### Planned features
 
@@ -63,10 +65,10 @@ EM.run do
       result.first.each_row_as_native { |r| p r }
       EM.stop
     end
-    defer1.errback { |errstr| puts "ERROR: #{errstr}"; EM.stop }
+    defer1.errback { |err| puts "ERROR: #{err.message}"; EM.stop }
   end
-  defer.errback do |errstr|
-    puts "Connection failed: #{errstr}"
+  defer.errback do |err|
+    puts "Connection failed: #{err.message}"
     EM.stop
   end
 end
@@ -74,10 +76,10 @@ end
 
 _produces:_
 
-    #<MosesPG::Column name="hello" type=#<MosesPG::Datatype::Varchar precision=30> format=0>
-    #<MosesPG::Column name="area_code" type=#<MosesPG::Datatype::Integer > format=0>
-    #<MosesPG::Column name="now" type=#<MosesPG::Datatype::Timestamp precision=6> format=0>
-    ["Hello World!", 954, 2012-03-14 23:26:33 -0400]
+    #<MosesPG::Column name="hello", type=MosesPG::Datatype::Varchar_30, format=0>
+    #<MosesPG::Column name="area_code", type=MosesPG::Datatype::Integer, format=0>
+    #<MosesPG::Column name="now", type=MosesPG::Datatype::Timestamp_6, format=0>
+    ["Hello World!", 954, 2012-04-21 00:30:23 -0400]
 
 Note that the last column has been translated to a Ruby Time object.
 
@@ -90,22 +92,22 @@ to run it later.
 require 'moses_pg'
 
 EM.run do
-  defer = MosesPG.connect(user: 'mosespg', password: 'mosespg')
+  defer = MosesPG.connect(user: 'mosespg', password: 'mosespg') #, logger: logger)
   defer.callback do |conn|
-    defer1 = conn.prepare('stmt1', "SELECT $1::varchar(30) AS hello, $2::int AS area_code, $3::timestamp AS now")
-    defer1.callback do
-      defer2 = conn.execute_prepared('stmt1', 'Hello world!', 954, Time.now)
+    defer1 = conn.prepare("SELECT $1::varchar(30) AS hello, $2::int AS area_code, $3::timestamp AS now")
+    defer1.callback do |stmt|
+      defer2 = stmt.execute('Hello world!', 954, Time.now)
       defer2.callback do |result|
         result.columns.each { |c| puts c }
         result.each_row_as_native { |r| p r }
         EM.stop
       end
-      defer2.errback { |errstr| puts "ERROR: #{errstr}"; EM.stop }
+      defer2.errback { |err| puts "ERROR: #{err.message}"; EM.stop }
     end
-    defer1.errback { |errstr| puts "ERROR: #{errstr}"; EM.stop }
+    defer1.errback { |err| puts "ERROR: #{err.message}"; EM.stop }
   end
-  defer.errback do |errstr|
-    puts "Connection failed: #{errstr}"
+  defer.errback do |err|
+    puts "Connection failed: #{err.message}"
     EM.stop
   end
 end
@@ -113,10 +115,10 @@ end
 
 _produces:_
 
-    #<MosesPG::Column name="hello", type=#<MosesPG::Datatype::Varchar precision=30>, format=0>
-    #<MosesPG::Column name="area_code", type=#<MosesPG::Datatype::Integer >, format=0>
-    #<MosesPG::Column name="now", type=#<MosesPG::Datatype::Timestamp precision=6>, format=0>
-    ["Hello world!", 954, 2012-03-16 11:47:12 -0400]
+    #<MosesPG::Column name="hello", type=MosesPG::Datatype::Varchar_30, format=0>
+    #<MosesPG::Column name="area_code", type=MosesPG::Datatype::Integer, format=0>
+    #<MosesPG::Column name="now", type=MosesPG::Datatype::Timestamp_6, format=0>
+    ["Hello world!", 954, 2012-04-21 00:33:42 -0400]
 
 ## License
 
