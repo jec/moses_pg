@@ -85,8 +85,8 @@ Note that the last column has been translated to a Ruby Time object.
 
 ### Prepared statements
 
-For prepared statements, use `#prepare` to parse and store the SQL, and `#execute_prepared`
-to run it later.
+For prepared statements, use `Connection#prepare` to parse the SQL and get a
+`Statement` object. Use `Statement#execute` to run it later.
 
 ```ruby
 require 'moses_pg'
