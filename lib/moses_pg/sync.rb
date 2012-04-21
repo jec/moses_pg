@@ -121,7 +121,7 @@ module MosesPG
     end
 
     def prepare!(sql, datatypes = nil)
-      Statement.prepare(self, sql, datatypes, self)
+      Statement.prepare!(@connection, sql, datatypes, self)
     end
 
     def commit!
@@ -146,8 +146,8 @@ module MosesPG
     # @raise [MosesPG::Error]
     # @return [MosesPG::Connection]
     #
-    def self.prepare!(connection, sql, datatypes = nil)
-      result = EM::Synchrony.sync(prepare(connection, sql, datatypes))
+    def self.prepare!(connection, sql, datatypes = nil, tx = nil)
+      result = EM::Synchrony.sync(prepare(connection, sql, datatypes, tx))
       raise result if result.kind_of?(Error)
       result
     end
