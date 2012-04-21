@@ -92,7 +92,7 @@ For prepared statements, use `Connection#prepare` to parse the SQL and get a
 require 'moses_pg'
 
 EM.run do
-  defer = MosesPG.connect(user: 'mosespg', password: 'mosespg') #, logger: logger)
+  defer = MosesPG.connect(user: 'mosespg', password: 'mosespg')
   defer.callback do |conn|
     defer1 = conn.prepare("SELECT $1::varchar(30) AS hello, $2::int AS area_code, $3::timestamp AS now")
     defer1.callback do |stmt|
@@ -119,6 +119,26 @@ _produces:_
     #<MosesPG::Column name="area_code", type=MosesPG::Datatype::Integer, format=0>
     #<MosesPG::Column name="now", type=MosesPG::Datatype::Timestamp_6, format=0>
     ["Hello world!", 954, 2012-04-21 00:33:42 -0400]
+
+### Synchronous queries
+
+Optional methods are available with a bang (!) suffix that block until the
+query is completed. Instead of a `Deferrable`, they return the data that would
+be received by the `#callback`.  To use these, `require 'moses_pg/sync'`. The
+following code is equivalent to the example above and outputs the same result.
+
+```ruby
+require 'moses_pg/sync'
+
+EM.synchrony do
+  conn = MosesPG.connect!(user: 'mosespg', password: 'mosespg')
+  stmt = conn.prepare!("SELECT $1::varchar(30) AS hello, $2::int AS area_code, $3::timestamp AS now")
+  result = stmt.execute!('Hello world!', 954, Time.now)
+  result.columns.each { |c| puts c }
+  result.each_row_as_native { |r| p r }
+  EM.stop
+end
+```
 
 ## License
 
