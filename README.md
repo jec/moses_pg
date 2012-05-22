@@ -13,6 +13,12 @@ MosesPG is currently being developed as pure Ruby, but this is not strictly a
 goal of the project. Eventually, if it is required for performance, I would
 consider coding parts as C extensions.
 
+### Status Update 22 May 2012
+
+The project team have decided to use a backend other than PostgreSQL. As a
+result, at this time, MosesPG is on my back burner. I hope to return to it soon
+with an upcoming project that will likely be using PostgreSQL.
+
 ## Dependencies
 
 * Ruby 1.9
@@ -38,14 +44,6 @@ consider coding parts as C extensions.
 
 * Translation to native Ruby types (though not all types yet have meaningful
   translations)
-
-### Planned features
-
-* SSL session encryption
-
-* Function call interface
-
-* COPY in/out operations
 
 ## Examples
 
