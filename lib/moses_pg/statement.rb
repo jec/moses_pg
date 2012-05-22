@@ -80,15 +80,21 @@ module MosesPG
       state :bound, :executed do
         def close_portal(tx = nil)
           deferrable = ::EM::DefaultDeferrable.new
-          defer1 = @connection._close_portal(self, tx)
-          close_portal_sent
-          defer1.callback do
-            action_completed
+          if @last_tx
+            # if the last bind was in a transaction, the portal was (or will
+            # be) closed at the end of that transaction
             deferrable.succeed
-          end
-          defer1.errback do |err|
-            action_failed
-            deferrable.fail(err)
+          else
+            defer1 = @connection._close_portal(self, tx)
+            close_portal_sent
+            defer1.callback do
+              action_completed
+              deferrable.succeed
+            end
+            defer1.errback do |err|
+              action_failed
+              deferrable.fail(err)
+            end
           end
           deferrable
         end
@@ -102,6 +108,7 @@ module MosesPG
           defer1 = close_portal(tx)
           defer1.callback do
             @portal_name = generate_portal_name
+            @last_tx = tx
             defer2 = @connection._bind(self, bindvars, tx)
             bind_sent
             defer2.callback do
